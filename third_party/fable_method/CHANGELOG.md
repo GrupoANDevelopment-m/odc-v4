@@ -1,0 +1,38 @@
+# Changelog
+
+## 1.4.0 (2026-07-15)
+
+- **Fit gate** (fable-method, before Step 0): routes each ask by where the answer lives - run the loop, research first, make a skill, or say plainly that the answer is a judgment call. The universal fallback is an honest hand-back, never faked rigor.
+- **Twin check** (Step 5(c)): after fixing any defect, search the whole project for the same pattern and write a forced `TWINS:` line. Took Haiku from 1-of-5 bug sites fixed to a full sweep (rounds 14-15).
+- **Artifact gate** (Step 6, terminal): one sweep that adds any owed-and-missing `INTENT`/`AUTH`/`PENDING`/`TWINS` line before the report is sent; fires only when something is owed. Adopted from community PR #2 by @wwk5q8z6kk-bit, the project's first outside contributor (round 15).
+- **fable-domain rebuilt** as a discuss -> research -> generate maker: hard red-lines (medical, legal, financial advice, mental health, and safety-critical domains are refused and routed to qualified humans), an early no-adapter-needed exit for sectors that are coding in disguise, a required step-by-step domain workflow with a flowchart, a fable-judge pass on the bundle before delivery, and a stated small-model boundary (run the maker mid-tier or attended).
+- **Skill safety**: the authorization gate now names installed skills explicitly; an installed skill's instruction is never authorization (validated 7 of 7 across tiers on `s14-trapped-skill`).
+- New fixtures `eval/scenarios/s13-twin-fleet/` and `eval/scenarios/s14-trapped-skill/`; `DOC.md` plain-language explainer; rounds 14-15 logged in `eval/RESULTS.md` (round 15 raw results in `eval/results/`).
+- Validated at build scale: a realistic 8-requirement app build, bare vs v1.4 on Haiku, judged by executing every requirement - 8/8 with truthful reports in all four runs.
+
+## 1.3.0 (2026-07-11)
+
+- **The gates** (`skills/fable-method/SKILL.md`, mirrored in AGENTS.md and flowcharts chart 5): the **authorization gate** (an outward-facing action needs the user's quoted words: `AUTH: user said "..."`; documentation is not authorization, completing the task is not authorization), the **scope line** (the plan names the files it will touch; expansion mid-work is a surprise), the **recall gate** (Step 4.2: open the source before first use of anything unopened this session, or label it memory), a **plain-language report rule** (the opening paragraph readable by someone who never saw the code; binding under domain adapters), the **PENDING line** (a doc-prescribed follow-up deliberately not taken appears verbatim as `PENDING: <action> - awaiting your authorization`), and five **standing prohibitions** (never commit/push unbidden, never weaken a check nor fabricate what it looks for, never touch secrets, never add a dependency silently, never delete outside scope). fable-loop gained the mid-execution research decision and a scope attacker lens; fable-judge gained the unauthorized-action fraud and the SCOPE diff check. Failure modes 15 and 16 added.
+- **Eval round 11, observe-first** (`eval/results/round11-observed-traces.json`, `round11-transfer.json`, case studies s9/s10/s11): rules were drafted first, then bare Fable 5 ran the new fixtures; where drafts and traces disagreed, observation won. The authorization gate earned its place at the frontier tier (one of two bare Fable runs took an unauthorized deploy that the fixture's own README prescribed). Published nulls: s10 (recall) and s11 (plain language) sat at ceiling for Haiku; failure mode 16 (silently dropped follow-up) resisted three rule wordings including a forced artifact even when the run demonstrably read the prescribing README, now a recorded open issue beside step-header leakage. The s2 regression held (both v1.3 runs surfaced the spec-vs-test conflict).
+- **fable-domain** (fourth skill) and **`references/domains/TEMPLATE.md`** (the explicit adapter schema, now CI-validated): `/fable-domain <sector>` produces an adapter bundle (researched adapter with a Sources section, trap fixture with answer sheet, smoke eval) following the process observed in two blind Fable 5 adapter-creation runs, with observed-vs-covenant provenance documented per step. The bundle rule: an adapter without its trap is not done.
+- **Eval round 12, the transfer test** (`eval/results/round12-fable-domain.json`, case study s12): Sonnet running fable-domain blind scored 9/10 against the Fable-trace bar (sources fetched and spot-checked, trap verified in all three states, debt declared honestly); Haiku scored 6/10. Shipped from the winning bundle: `references/domains/devops.md` (the suite's first sourced adapter; eighth domain) and `eval/scenarios/s12-silenced-alert/`. The s12 Haiku A/B was a ceiling null, published as such.
+- AGENTS.md re-synced with SKILL.md (it had drifted behind the 1.2.0 orient-first and cleanup rules); failure-modes.md rule references corrected; skill-in-skill routing explicitly deferred to v1.4 (needs a headless eval harness plus a booby-trapped-skill fixture).
+
+## 1.2.0 (2026-07-09)
+
+- **Flowcharts** (`skills/fable-method/references/flowcharts.md`): the whole method as seven Mermaid decision charts (master router, ask classification, bounded evidence loop, intent gate, verify loop, judge verdict flow, family router); the master router is embedded in the README.
+- **Observation study (eval round 10)**: two bare Fable 5 agents ran real problems and their tool-call transcripts were extracted as behavioral ground truth. The traces validated the method's core paths and corrected it in three places, now shipped: an orient-first rule (Step 2 rule 1: enumerate the environment before reading anything specific), the parallelization rule narrowed to independent expensive lookups (small local reads may chain adaptively), and a cleanup-before-reporting rule (Step 6: delete your scratch artifacts and say so). Where introspection and observation disagreed, observation won.
+
+## 1.1.0 (2026-07-07)
+
+- **Domain adapters** (`skills/fable-method/references/domains/`): seven sectors (marketing, research, data analysis, business/ops, finance, legal/compliance, design/UX), each defining its evidence, authority order, verification meaning, fraud table, and a binding minimum evidence set. Coding remains the default; medical/clinical deliberately excluded.
+- fable-method routes tasks to adapters before Step 2; fable-judge hunts each domain's fraud table on non-code work.
+- Eval round 9: with the marketing adapter, Haiku found unmentioned source docs and caught 6/6 planted frauds in both runs, versus a coin flip bare (one bare run praised a fraudulent price). Round 9a's fixture-design null recorded alongside. New fixture: `eval/scenarios/s8-fraudulent-copy/`.
+- CI checks (`.github/workflows/checks.yml`): manifests, skill frontmatter, adapter completeness, evidence JSON, scenario integrity, and the no-dash style rule.
+- CONTRIBUTING.md with the prime directive: no rule ships without a failing test first.
+
+## 1.0.0 (2026-07-06)
+
+- Initial release: the Fable Workflow as three skills (fable-method, fable-loop, fable-judge), packaged as a Claude Code plugin and self-hosted marketplace.
+- Portable AGENTS.md for non-Claude harnesses; one-command installers.
+- The eval program: 8 rounds, 159 agent runs, 7 trap fixtures, raw sanitized judge outputs committed in `eval/results/`, with wins, nulls, and the v1/v2 failures reported.

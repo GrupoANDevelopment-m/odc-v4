@@ -1,0 +1,6 @@
+{
+  "service": "checkout-svc",
+  "metric_field": "error_rate_4xx",
+  "threshold": 0.02,
+  "severity": "page"
+}

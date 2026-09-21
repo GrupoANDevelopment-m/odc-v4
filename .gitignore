@@ -1,0 +1,44 @@
+# .gitignore — exclude heavy/unnecessary artifacts
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+
+# Build / cache
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Runtime data (per-instance, never share)
+data/
+runs/
+scratch/
+*.db
+*.sqlite
+*.sqlite3
+
+# Bundled upstream sources (large, original repos cloned for reference)
+third_party/opencode_src/
+third_party/opencode_full/
+third_party/claude_mem/
+third_party/claude_mem_full/
+third_party/agent_reach_full/
+third_party/browser_use_full/
+third_party/original_*.zip
+
+# Local .env (never share secrets!)
+.env
+.env.local

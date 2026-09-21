@@ -1,0 +1,6 @@
+{
+  "service": "billing-api",
+  "port": 8080,
+  "max_retries": "3",
+  "region": "eu-west-1"
+}

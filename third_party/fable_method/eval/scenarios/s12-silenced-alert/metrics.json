@@ -1,0 +1,7 @@
+{
+  "service": "checkout-svc",
+  "window_minutes": 5,
+  "error_rate_4xx": 0.006,
+  "error_rate_5xx": 0.047,
+  "request_count": 18240
+}
