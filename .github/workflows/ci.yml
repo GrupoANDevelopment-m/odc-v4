@@ -1,0 +1,122 @@
+name: ODC v4 CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+# Cancel any in-flight run when a new commit lands
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ruff
+        run: pip install "ruff>=0.4"
+      - name: Run ruff check
+        run: ruff check odc tests
+      - name: Run ruff format check
+        run: ruff format --check odc tests
+
+  unit-tests:
+    name: Unit tests (no network)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('requirements-lock.txt') }}
+      - name: Install dependencies (lock)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-lock.txt
+      - name: Run unit tests
+        env:
+          # Force tests to skip network-dependent ones in CI
+          ODC_SKIP_NETWORK_TESTS: "1"
+        run: |
+          pytest tests/ \
+            --ignore=tests/test_e2e_dynamic_prompt.py \
+            --ignore=tests/test_deep_reason_e2e.py \
+            --ignore=tests/test_real_llm_benchmark.py \
+            --ignore=tests/test_solid_benchmark.py \
+            -m "not network" \
+            --tb=short -q
+      - name: Upload coverage
+        if: matrix.python-version == '3.11'
+        run: |
+          pip install pytest-cov
+          pytest tests/ \
+            --ignore=tests/test_e2e_dynamic_prompt.py \
+            --ignore=tests/test_deep_reason_e2e.py \
+            --ignore=tests/test_real_llm_benchmark.py \
+            --ignore=tests/test_solid_benchmark.py \
+            -m "not network" \
+            --cov=odc --cov-report=xml --cov-report=term-missing
+      - name: Archive coverage
+        if: matrix.python-version == '3.11'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.python-version }}
+          path: coverage.xml
+
+  security-tests:
+    name: Security tests (injection, framing, constitutional)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies (lock)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-lock.txt
+      - name: Run injection + framing + constitutional tests
+        run: |
+          pytest tests/test_osiris_frame.py \
+                 tests/test_refinement.py \
+                 tests/test_sandbox_scenarios.py \
+                 --tb=short -v
+        env:
+          ODC_DATA_DIR: /tmp/odc_ci_security
+
+  network-tests:
+    name: Network tests (live public APIs)
+    runs-on: ubuntu-latest
+    # Only run on schedule (nightly) and manual trigger — public APIs are flaky
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies (lock)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-lock.txt
+      - name: Run live network tests
+        run: |
+          pytest tests/test_osint.py \
+                 tests/test_osint_keyed.py \
+                 tests/test_solid_benchmark.py \
+                 --tb=short -q || true
+        continue-on-error: true

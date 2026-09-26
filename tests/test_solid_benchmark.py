@@ -70,6 +70,7 @@ def _call(tool_obj, **kwargs):
 # ═══════════════════════════════════════════════════════════════════════
 # SECTION 1 — LIVE OSINT BENCHMARK (no mocks)
 # ═══════════════════════════════════════════════════════════════════════
+@pytest.mark.network
 class TestLiveOSINTBenchmark:
     """Test 1: each OSINT tool hits a live API and produces well-formed data."""
 
@@ -148,6 +149,7 @@ class TestLiveOSINTBenchmark:
 # ═══════════════════════════════════════════════════════════════════════
 # SECTION 2 — COMPONENT TESTS WITH PUBLIC DATA (no mocks)
 # ═══════════════════════════════════════════════════════════════════════
+@pytest.mark.network
 class TestComponentsWithPublicData:
     """Test 2: each internal component behaves correctly on public-shaped data."""
 
