@@ -1,13 +1,28 @@
-"""Web interface for the ODC agent.
+"""Web interface for the ODC agent — premium 3D immersive UI.
 
-A tiny stdlib-only HTTP server with a chat UI. No external deps.
-Designed to be the surface the user talks to in natural language
-— the LLM does the routing, not the UI.
+Serves the dark/glassmorphic interface with a Three.js DNA-helix
+background, exposed under /.
+
+Endpoints:
+  GET  /                          — main HTML (3D UI)
+  GET  /api/info                   — provider/model/tools/skills
+  GET  /api/metrics                — live session metrics
+  POST /api/chat                   — run a turn (async, returns report)
+  GET  /api/sessions               — list sessions
+  POST /api/sessions/new           — start new session
+  POST /api/sessions/select        — switch session
+  GET  /api/models                 — list local Ollama models
+  POST /api/models/use             — set active local model
+  POST /api/models/pull            — pull a new model
+  POST /api/models/delete          — remove a model
+  GET  /api/training/stats         — dataset stats
+  POST /api/training/export        — export curated dataset
+  POST /api/training/start         — start fine-tune
+  GET  /api/training/status        — last fine-tune status
 
 Run with:
-    odc web                 # starts on http://127.0.0.1:8765
-    odc web --port 9000     # custom port
-    odc web --host 0.0.0.0  # bind to all interfaces
+    odc web                 # http://127.0.0.1:8765
+    odc web --port 9000
 """
 from __future__ import annotations
 
@@ -15,7 +30,6 @@ import argparse
 import asyncio
 import json
 import os
-import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -25,233 +39,11 @@ from odc.observability import get_logger, setup_logging
 
 log = get_logger("odc.web")
 
-INDEX_HTML = """<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ODC — honest agent</title>
-<style>
-  :root {
-    --bg: #0e0f13;
-    --panel: #161821;
-    --fg: #e8eaf0;
-    --muted: #8b8f9b;
-    --accent: #6ee7b7;
-    --border: #2a2d3a;
-    --err: #fca5a5;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--fg);
-    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
-  header {
-    padding: 16px 24px;
-    border-bottom: 1px solid var(--border);
-    background: var(--panel);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
-  header .meta { color: var(--muted); font-size: 12px; }
-  main {
-    flex: 1;
-    overflow-y: auto;
-    padding: 24px;
-    max-width: 900px;
-    width: 100%;
-    margin: 0 auto;
-  }
-  .msg {
-    margin-bottom: 16px;
-    padding: 14px 18px;
-    border-radius: 8px;
-    background: var(--panel);
-    border: 1px solid var(--border);
-  }
-  .msg.user { background: #1d2030; }
-  .msg.assistant { background: #161821; }
-  .msg.system { background: #181a23; color: var(--muted); font-size: 13px; }
-  .msg .role { font-size: 11px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; letter-spacing: 0.05em; }
-  .msg pre { background: #0a0b0f; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 13px; }
-  .msg code { background: #0a0b0f; padding: 2px 6px; border-radius: 3px; font-size: 13px; }
-  .msg pre code { background: transparent; padding: 0; }
-  .msg .tools {
-    margin-top: 10px;
-    font-size: 12px;
-    color: var(--muted);
-    padding-top: 8px;
-    border-top: 1px dashed var(--border);
-  }
-  .msg .tool-call {
-    display: inline-block;
-    padding: 2px 6px;
-    background: #0a0b0f;
-    border-radius: 3px;
-    margin-right: 4px;
-    color: var(--accent);
-  }
-  footer {
-    border-top: 1px solid var(--border);
-    background: var(--panel);
-    padding: 12px 24px;
-  }
-  form {
-    display: flex;
-    gap: 8px;
-    max-width: 900px;
-    margin: 0 auto;
-  }
-  input[type=text] {
-    flex: 1;
-    background: #0a0b0f;
-    color: var(--fg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 10px 14px;
-    font: inherit;
-    outline: none;
-  }
-  input[type=text]:focus { border-color: var(--accent); }
-  button {
-    background: var(--accent);
-    color: #0e0f13;
-    border: none;
-    border-radius: 6px;
-    padding: 0 18px;
-    font: inherit;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  button:disabled { opacity: 0.4; cursor: not-allowed; }
-  .empty { color: var(--muted); text-align: center; margin-top: 80px; }
-  .empty h2 { font-weight: 500; font-size: 20px; margin-bottom: 8px; color: var(--fg); }
-  .empty p { font-size: 14px; max-width: 480px; margin: 0 auto 12px; line-height: 1.7; }
-  .empty code { background: #0a0b0f; padding: 2px 8px; border-radius: 3px; font-size: 13px; }
-  .loading { color: var(--muted); font-style: italic; }
-  .err { color: var(--err); }
-</style>
-</head>
-<body>
-<header>
-  <h1>ODC <span style="color: var(--muted); font-weight: 400; font-size: 13px;">— honest agent</span></h1>
-  <div class="meta" id="meta">connecting…</div>
-</header>
-<main id="messages">
-  <div class="empty" id="empty">
-    <h2>Talk to ODC in natural language.</h2>
-    <p>It uses the Fable Method (think → act → prove) with persistent memory, real tools, and the ability to extend itself when it hits a wall.</p>
-    <p>Try: <code>find all the TODO comments in odc/ and add a one-line summary to README.md</code></p>
-    <p>Or: <code>what's the deploy command for the staging cluster?</code></p>
-    <p>Or: <code>access our SAP system at erp.corp.local:8443 with the credentials in .env</code></p>
-  </div>
-</main>
-<footer>
-  <form id="form" autocomplete="off">
-    <input type="text" id="input" placeholder="ask ODC anything…" autofocus>
-    <button type="submit" id="send">send</button>
-  </form>
-</footer>
-<script>
-const $ = (id) => document.getElementById(id);
-const messages = $('messages');
-const empty = $('empty');
-const form = $('form');
-const input = $('input');
-const send = $('send');
-const meta = $('meta');
+# ── Resolve paths to bundled assets ─────────────────────────────
+_HERE = Path(__file__).resolve().parent
+INDEX_HTML = (_HERE / "index.html").read_text(encoding="utf-8")
 
-let nextId = 1;
-const transcript = [];
-
-function escapeHtml(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function md(s) {
-  // Minimal markdown: code fences, inline code, line breaks.
-  let html = escapeHtml(s);
-  html = html.replace(/```(\\w*)\\n([\\s\\S]*?)```/g, '<pre><code>$2</code></pre>');
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-  html = html.replace(/\\n/g, '<br>');
-  return html;
-}
-
-function add(role, text, tools) {
-  if (empty) empty.remove();
-  const div = document.createElement('div');
-  div.className = 'msg ' + role;
-  let html = `<div class="role">${role}</div><div class="body">${md(text)}</div>`;
-  if (tools && tools.length) {
-    html += '<div class="tools">tools: ';
-    html += tools.map(t => `<span class="tool-call">${escapeHtml(t)}</span>`).join('');
-    html += '</div>';
-  }
-  div.innerHTML = html;
-  messages.appendChild(div);
-  messages.scrollTop = messages.scrollHeight;
-  return div;
-}
-
-function setMeta(s) { meta.textContent = s; }
-
-async function loadMeta() {
-  try {
-    const r = await fetch('/api/info');
-    if (r.ok) {
-      const d = await r.json();
-      setMeta(`${d.provider}/${d.model} · ${d.tools} tools · ${d.skills} skills`);
-    } else { setMeta('disconnected'); }
-  } catch { setMeta('offline'); }
-}
-
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const text = input.value.trim();
-  if (!text) return;
-  input.value = '';
-  send.disabled = true;
-  add('user', text);
-  transcript.push({ role: 'user', text });
-  const placeholder = add('assistant', '<span class="loading">working…</span>');
-  try {
-    const r = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    });
-    if (!r.ok) {
-      const err = await r.text();
-      placeholder.innerHTML = `<div class="role">error</div><div class="err">${escapeHtml(err)}</div>`;
-    } else {
-      const d = await r.json();
-      placeholder.innerHTML = `<div class="role">assistant</div><div class="body">${md(d.report)}</div>` +
-        (d.tools && d.tools.length ? `<div class="tools">turns: ${d.turns} · tools: ${d.tools.map(t => `<span class="tool-call">${escapeHtml(t)}</span>`).join('')}</div>` : '');
-      transcript.push({ role: 'assistant', text: d.report });
-    }
-  } catch (err) {
-    placeholder.innerHTML = `<div class="role">error</div><div class="err">${escapeHtml(err.message || err)}</div>`;
-  } finally {
-    send.disabled = false;
-    input.focus();
-  }
-});
-
-loadMeta();
-</script>
-</body>
-</html>
-"""
-
-
-# Lazy-imported agent to avoid circular imports.
+# Lazy agent import (avoid circular)
 _agent_lock = threading.Lock()
 _agent_instance: Any = None
 
@@ -283,9 +75,9 @@ def _get_info() -> dict[str, Any]:
     }
 
 
-def _run_task(text: str) -> dict[str, Any]:
+def _run_task(text: str, session_id: str | None = None) -> dict[str, Any]:
     agent = _get_agent()
-    run = asyncio.run(agent.run(text))
+    run = asyncio.run(agent.run(text, session_id=session_id))
     tools_used: list[str] = []
     for msg in run.result.final_messages:
         if msg.tool_calls:
@@ -296,20 +88,101 @@ def _run_task(text: str) -> dict[str, Any]:
         "tool_calls": run.result.tool_calls,
         "tools": tools_used,
         "handed_back": run.result.handed_back_reason,
+        "session_id": getattr(run, "session_id", session_id),
     }
 
 
+def _get_metrics() -> dict[str, Any]:
+    """Live session metrics — pulls from ops store + agent state."""
+    from odc import Config
+    from odc.observability.ops import OpsStore
+
+    cfg = Config()
+    ops_path = cfg.data_dir / "ops" / "metrics.db"
+    brain = {"name": "primary", "detail": cfg.llm_provider}
+
+    if ops_path.exists():
+        try:
+            store = OpsStore(ops_path)
+            summary = store.summary()
+        except Exception:
+            summary = {}
+    else:
+        summary = {}
+
+    # Check local brain
+    try:
+        from odc.llm.local import LocalBrain
+        brain_status = LocalBrain(cfg).status()
+        if brain_status.get("installed"):
+            brain = {"name": "local", "detail": f"{brain_status['installed']} model(s)"}
+        else:
+            brain = {"name": "primary", "detail": cfg.llm_provider}
+    except Exception:
+        pass
+
+    return {
+        "turns": summary.get("turns", 0),
+        "llm_calls": summary.get("llm_calls", 0),
+        "tool_calls": summary.get("tool_calls", 0),
+        "tokens_in": summary.get("tokens_in", 0),
+        "tokens_out": summary.get("tokens_out", 0),
+        "cost_usd": summary.get("cost_usd", 0.0),
+        "p95_ms": summary.get("p95_ms"),
+        "brain": brain,
+    }
+
+
+def _list_sessions() -> dict[str, Any]:
+    """List persisted sessions from Osiris memory."""
+    try:
+        from odc import Config
+        from odc.mcp.osiris import OsirisMemory
+
+        cfg = Config()
+        mem = OsirisMemory(cfg.data_dir / "memory" / "osiris.db")
+        rows = mem.list_sessions(limit=50)
+        return {
+            "sessions": [
+                {
+                    "id": r.get("id", ""),
+                    "title": r.get("title", "(untitled)"),
+                    "turns": r.get("turn_count", 0),
+                    "age": _age_str(r.get("updated_at")),
+                    "active": r.get("active", False),
+                }
+                for r in rows
+            ]
+        }
+    except Exception as e:
+        log.warning("list_sessions failed: %s", e)
+        return {"sessions": []}
+
+
+def _age_str(ts: int | None) -> str:
+    if not ts:
+        return "—"
+    import time
+    delta = max(0, int(time.time()) - ts)
+    if delta < 60: return f"{delta}s ago"
+    if delta < 3600: return f"{delta//60}m ago"
+    if delta < 86400: return f"{delta//3600}h ago"
+    return f"{delta//86400}d ago"
+
+
 class Handler(BaseHTTPRequestHandler):
-    """One handler for everything: GET /, GET /api/info, POST /api/chat."""
+    """Single handler — routes by path."""
 
     def log_message(self, fmt, *args):
         log.info("%s - %s", self.address_string(), fmt % args)
 
+    # ── helpers ──
     def _send_json(self, code: int, payload: Any) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)
 
@@ -320,44 +193,175 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def do_GET(self) -> None:
-        if self.path == "/" or self.path.startswith("/index"):
-            self._send_text(200, INDEX_HTML.encode("utf-8"), "text/html; charset=utf-8")
-            return
-        if self.path == "/api/info":
-            try:
-                self._send_json(200, _get_info())
-            except Exception as e:
-                self._send_json(500, {"error": str(e)})
-            return
-        if self.path == "/favicon.ico":
-            self._send_text(204, b"", "image/x-icon")
-            return
-        self._send_text(404, b"not found", "text/plain")
+    def _read_json(self) -> dict[str, Any]:
+        ln = int(self.headers.get("content-length", "0"))
+        raw = self.rfile.read(ln).decode("utf-8") if ln else "{}"
+        return json.loads(raw)
 
+    # ── GET routes ──
+    def do_GET(self) -> None:
+        path = self.path.split("?")[0]
+        try:
+            if path in ("/", "/index.html"):
+                self._send_text(200, INDEX_HTML.encode("utf-8"), "text/html; charset=utf-8")
+            elif path == "/api/info":
+                self._send_json(200, _get_info())
+            elif path == "/api/metrics":
+                self._send_json(200, _get_metrics())
+            elif path == "/api/sessions":
+                self._send_json(200, _list_sessions())
+            elif path == "/api/models":
+                self._handle_models_list()
+            elif path == "/api/training/stats":
+                self._handle_training_stats()
+            elif path == "/api/training/status":
+                self._handle_training_status()
+            elif path == "/favicon.ico":
+                self._send_text(204, b"", "image/x-icon")
+            else:
+                self._send_text(404, b"not found", "text/plain")
+        except Exception as e:  # noqa: BLE001
+            log.exception("GET %s failed", path)
+            self._send_json(500, {"error": f"{type(e).__name__}: {e}"})
+
+    # ── POST routes ──
     def do_POST(self) -> None:
-        if self.path != "/api/chat":
-            self._send_text(404, b"not found", "text/plain")
+        path = self.path.split("?")[0]
+        try:
+            data = self._read_json()
+        except Exception:
+            self._send_json(400, {"error": "invalid JSON"})
             return
         try:
-            ln = int(self.headers.get("content-length", "0"))
-            raw = self.rfile.read(ln).decode("utf-8") if ln else "{}"
-            data = json.loads(raw)
-            text = (data.get("text") or "").strip()
-            if not text:
-                self._send_json(400, {"error": "empty text"})
-                return
-            result = _run_task(text)
-            self._send_json(200, result)
+            if path == "/api/chat":
+                text = (data.get("text") or "").strip()
+                if not text:
+                    self._send_json(400, {"error": "empty text"})
+                    return
+                session_id = data.get("session_id")
+                result = _run_task(text, session_id=session_id)
+                self._send_json(200, result)
+            elif path == "/api/sessions/new":
+                self._send_json(200, {"ok": True, "session_id": self._new_session()})
+            elif path == "/api/sessions/select":
+                sid = data.get("id")
+                self._send_json(200, {"ok": True, "selected": sid})
+            elif path == "/api/models/use":
+                self._handle_models_use(data)
+            elif path == "/api/models/pull":
+                self._handle_models_pull(data)
+            elif path == "/api/models/delete":
+                self._handle_models_delete(data)
+            elif path == "/api/training/export":
+                self._handle_training_export()
+            elif path == "/api/training/start":
+                self._handle_training_start()
+            else:
+                self._send_text(404, b"not found", "text/plain")
         except Exception as e:  # noqa: BLE001
-            log.exception("chat handler failed")
+            log.exception("POST %s failed", path)
             self._send_json(500, {"error": f"{type(e).__name__}: {e}"})
+
+    # ── models (Local Brain) ──
+    def _handle_models_list(self) -> None:
+        from odc import Config
+        from odc.llm.local import LocalBrain
+        try:
+            brain = LocalBrain(Config())
+            data = brain.list_models()
+            self._send_json(200, {"models": data})
+        except Exception as e:
+            self._send_json(200, {"models": [], "error": str(e), "hint": "Install Ollama: https://ollama.com"})
+
+    def _handle_models_use(self, data: dict) -> None:
+        from odc import Config
+        from odc.llm.local import LocalBrain
+        name = data.get("name")
+        if not name:
+            self._send_json(400, {"error": "name required"})
+            return
+        LocalBrain(Config()).set_active(name)
+        self._send_json(200, {"ok": True, "active": name})
+
+    def _handle_models_pull(self, data: dict) -> None:
+        from odc import Config
+        from odc.llm.local import LocalBrain
+        name = data.get("name")
+        if not name:
+            self._send_json(400, {"error": "name required"})
+            return
+        result = LocalBrain(Config()).pull(name)
+        self._send_json(200, result)
+
+    def _handle_models_delete(self, data: dict) -> None:
+        from odc import Config
+        from odc.llm.local import LocalBrain
+        name = data.get("name")
+        if not name:
+            self._send_json(400, {"error": "name required"})
+            return
+        result = LocalBrain(Config()).delete(name)
+        self._send_json(200, result)
+
+    # ── training ──
+    def _handle_training_stats(self) -> None:
+        from odc import Config
+        from odc.training import TrainingStore
+        try:
+            store = TrainingStore(Config())
+            self._send_json(200, store.stats())
+        except Exception as e:
+            self._send_json(200, {"error": str(e), "total": 0, "passed": 0, "bipolar": 0})
+
+    def _handle_training_status(self) -> None:
+        from odc import Config
+        from odc.training import TrainingStore
+        try:
+            store = TrainingStore(Config())
+            self._send_json(200, store.last_run())
+        except Exception:
+            self._send_json(200, {"status": "never run"})
+
+    def _handle_training_export(self) -> None:
+        from odc import Config
+        from odc.training import TrainingStore
+        try:
+            store = TrainingStore(Config())
+            result = store.export_dataset()
+            self._send_json(200, result)
+        except Exception as e:
+            self._send_json(500, {"error": str(e)})
+
+    def _handle_training_start(self) -> None:
+        from odc import Config
+        from odc.training import TrainingStore
+        try:
+            store = TrainingStore(Config())
+            result = store.start_finetune()
+            self._send_json(200, result)
+        except Exception as e:
+            self._send_json(500, {"error": str(e)})
+
+    # ── sessions ──
+    def _new_session(self) -> str:
+        try:
+            from odc import Config
+            from odc.mcp.osiris import OsirisMemory
+            cfg = Config()
+            mem = OsirisMemory(cfg.data_dir / "memory" / "osiris.db")
+            sid = mem.create_session(title="web-session")
+            return sid
+        except Exception as e:
+            log.warning("new session failed: %s", e)
+            return ""
 
 
 def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
     """Run the web server. Blocks."""
     httpd = ThreadingHTTPServer((host, port), Handler)
-    print(f"ODC web: http://{host}:{port}")
+    print(f"ODC v4 web: http://{host}:{port}")
+    print("Premium 3D interface (DNA Digital theme).")
+    print("Endpoints: /api/info /api/chat /api/models /api/training /api/sessions /api/metrics")
     print("Press Ctrl-C to stop.")
     try:
         httpd.serve_forever()
@@ -367,7 +371,7 @@ def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(prog="odc web", description="Web chat for the ODC agent.")
+    p = argparse.ArgumentParser(prog="odc web", description="Web chat for the ODC agent (3D DNA Digital UI).")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8765)
     args = p.parse_args()

@@ -42,3 +42,5 @@ third_party/original_*.zip
 # Local .env (never share secrets!)
 .env
 .env.local
+.odc_data/
+logs/
