@@ -9,26 +9,30 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg-0: #05050a;
-  --bg-1: #0a0a14;
-  --bg-2: #11111f;
-  --panel: rgba(20, 22, 38, 0.55);
-  --panel-bright: rgba(28, 30, 50, 0.82);
-  --border: rgba(110, 231, 183, 0.18);
-  --border-strong: rgba(110, 231, 183, 0.45);
-  --fg: #e8eaf6;
-  --fg-dim: #a4a8c0;
-  --fg-muted: #6b6f88;
-  --accent: #6ee7b7;
-  --accent-2: #00d4ff;
-  --accent-3: #b794f4;
-  --warn: #fbbf24;
-  --err: #f87171;
-  --ok: #6ee7b7;
-  --shadow-1: 0 4px 24px rgba(0, 0, 0, 0.4);
-  --shadow-2: 0 8px 48px rgba(0, 212, 255, 0.12);
-  --glow-accent: 0 0 24px rgba(110, 231, 183, 0.35);
-  --glow-cool: 0 0 24px rgba(0, 212, 255, 0.35);
+  /* Palette aligned with the DNA Digital logo:
+     primary = gold metallic (the "ODC" text), secondary = electric blue
+     (the neural brain patterns), tertiary = warm amber (inner halo) */
+  --bg-0: #06080d;
+  --bg-1: #0d1018;
+  --bg-2: #141824;
+  --panel: rgba(20, 14, 6, 0.55);
+  --panel-bright: rgba(28, 22, 10, 0.82);
+  --border: rgba(212, 175, 55, 0.20);
+  --border-strong: rgba(212, 175, 55, 0.55);
+  --fg: #f5e6c8;
+  --fg-dim: #b8a785;
+  --fg-muted: #756853;
+  --accent: #d4af37;
+  --accent-2: #4d9fff;
+  --accent-3: #f0c674;
+  --warn: #ffa726;
+  --err: #ff5252;
+  --ok: #66bb6a;
+  --shadow-1: 0 4px 24px rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 8px 48px rgba(212, 175, 55, 0.15);
+  --glow-accent: 0 0 24px rgba(212, 175, 55, 0.45);
+  --glow-cool: 0 0 24px rgba(77, 159, 255, 0.35);
+  --glow-warm: 0 0 32px rgba(240, 198, 116, 0.30);
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
 }
@@ -76,9 +80,9 @@ body {
 .brand-mark {
   width: 32px; height: 32px;
   border-radius: 7px;
-  background: linear-gradient(135deg, #6ee7b7 0%, #00d4ff 50%, #b794f4 100%);
+  background: linear-gradient(135deg, #d4af37 0%, #f0c674 50%, #4d9fff 100%);
   position: relative;
-  box-shadow: var(--glow-accent);
+  box-shadow: var(--glow-warm);
 }
 .brand-mark::before {
   content: ''; position: absolute; inset: 3px;
@@ -87,13 +91,13 @@ body {
 .brand-mark::after {
   content: ''; position: absolute; inset: 9px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6ee7b7, #00d4ff);
-  box-shadow: 0 0 10px rgba(110, 231, 183, 0.7);
+  background: linear-gradient(135deg, #f0c674, #d4af37);
+  box-shadow: 0 0 12px rgba(240, 198, 116, 0.85);
 }
 .brand-text { display: flex; flex-direction: column; }
 .brand-name {
   font-size: 15px; font-weight: 700; letter-spacing: -0.01em;
-  background: linear-gradient(135deg, #6ee7b7, #00d4ff 60%, #b794f4);
+  background: linear-gradient(135deg, #d4af37, #f0c674 35%, #4d9fff);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -182,7 +186,7 @@ body {
 }
 .session-item.active {
   border-color: var(--accent);
-  background: rgba(110, 231, 183, 0.06);
+  background: rgba(212, 175, 55, 0.08);
 }
 .session-item .title {
   font-size: 12px; font-weight: 500;
@@ -199,7 +203,7 @@ body {
   gap: 6px;
 }
 .new-session-btn {
-  background: linear-gradient(135deg, rgba(110, 231, 183, 0.12), rgba(0, 212, 255, 0.12));
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.14), rgba(240, 198, 116, 0.10));
   border: 1px solid var(--border-strong);
   color: var(--accent);
   padding: 9px 12px;
@@ -211,12 +215,12 @@ body {
   transition: all 0.18s ease;
 }
 .new-session-btn:hover {
-  background: linear-gradient(135deg, rgba(110, 231, 183, 0.22), rgba(0, 212, 255, 0.22));
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.26), rgba(240, 198, 116, 0.20));
 }
 
 /* brain widget */
 .brain-card {
-  background: linear-gradient(135deg, rgba(110, 231, 183, 0.06), rgba(0, 212, 255, 0.04));
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.08), rgba(240, 198, 116, 0.04));
   border: 1px solid var(--border);
   border-radius: 9px;
   padding: 12px;
@@ -227,7 +231,7 @@ body {
   content: '';
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at top right, rgba(110, 231, 183, 0.15), transparent 60%);
+  background: radial-gradient(circle at top right, rgba(240, 198, 116, 0.18), transparent 60%);
   pointer-events: none;
 }
 .brain-label {
@@ -306,11 +310,11 @@ body {
   font-weight: 700;
 }
 .msg.user .msg-avatar {
-  background: linear-gradient(135deg, #b794f4, #00d4ff);
+  background: linear-gradient(135deg, #f0c674, #d4af37);
   color: var(--bg-0);
 }
 .msg.assistant .msg-avatar {
-  background: linear-gradient(135deg, #6ee7b7, #00d4ff);
+  background: linear-gradient(135deg, #d4af37, #4d9fff);
   color: var(--bg-0);
   box-shadow: var(--glow-accent);
 }
@@ -348,6 +352,7 @@ body {
 }
 .msg.user .msg-meta .role { color: var(--accent-3); }
 .msg.assistant .msg-meta .role { color: var(--accent); }
+.msg.tool .msg-meta .role { color: var(--warn); }
 .msg.tool .msg-meta .role { color: var(--warn); }
 .msg.error .msg-meta .role { color: var(--err); }
 
@@ -409,12 +414,12 @@ body {
   gap: 5px; margin-top: 6px;
 }
 .tool-call {
-  background: rgba(0, 212, 255, 0.08);
-  border: 1px solid rgba(0, 212, 255, 0.3);
+  background: rgba(212, 175, 55, 0.10);
+  border: 1px solid rgba(212, 175, 55, 0.35);
   border-radius: 5px;
   padding: 3px 8px;
   font: 10px var(--font-mono);
-  color: var(--accent-2);
+  color: var(--accent);
 }
 
 /* composer */
@@ -486,7 +491,7 @@ body {
 }
 .send-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 0 36px rgba(110, 231, 183, 0.55);
+  box-shadow: 0 0 36px rgba(240, 198, 116, 0.55);
 }
 .send-btn:disabled {
   opacity: 0.4; cursor: not-allowed;
@@ -503,7 +508,7 @@ body {
 .subpage-title {
   font-size: 22px;
   font-weight: 700;
-  background: linear-gradient(135deg, #6ee7b7, #00d4ff);
+  background: linear-gradient(135deg, #d4af37, #f0c674 50%, #4d9fff);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -605,7 +610,7 @@ body {
 .btn:hover { border-color: var(--border-strong); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn.primary {
-  background: linear-gradient(135deg, rgba(110, 231, 183, 0.18), rgba(0, 212, 255, 0.18));
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.20), rgba(240, 198, 116, 0.16));
   border-color: var(--border-strong);
   color: var(--accent);
 }
@@ -649,8 +654,8 @@ body {
 }
 .tag {
   font: 9px var(--font-mono);
-  background: rgba(110, 231, 183, 0.12);
-  border: 1px solid rgba(110, 231, 183, 0.3);
+  background: rgba(212, 175, 55, 0.14);
+  border: 1px solid rgba(212, 175, 55, 0.35);
   color: var(--accent);
   padding: 2px 6px;
   border-radius: 4px;
@@ -658,8 +663,8 @@ body {
   letter-spacing: 0.06em;
   font-weight: 600;
 }
-.tag.local { background: rgba(0, 212, 255, 0.12); border-color: rgba(0, 212, 255, 0.3); color: var(--accent-2); }
-.tag.recommended { background: rgba(183, 148, 244, 0.12); border-color: rgba(183, 148, 244, 0.3); color: var(--accent-3); }
+.tag.local { background: rgba(77, 159, 255, 0.14); border-color: rgba(77, 159, 255, 0.35); color: var(--accent-2); }
+.tag.recommended { background: rgba(240, 198, 116, 0.14); border-color: rgba(240, 198, 116, 0.4); color: var(--accent-3); }
 .model-meta {
   font: 11px var(--font-mono);
   color: var(--fg-muted);
@@ -708,9 +713,9 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.pill.ok { background: rgba(110, 231, 183, 0.12); color: var(--ok); border: 1px solid rgba(110, 231, 183, 0.3); }
-.pill.warn { background: rgba(251, 191, 36, 0.12); color: var(--warn); border: 1px solid rgba(251, 191, 36, 0.3); }
-.pill.err { background: rgba(248, 113, 113, 0.12); color: var(--err); border: 1px solid rgba(248, 113, 113, 0.3); }
+.pill.ok { background: rgba(102, 187, 106, 0.14); color: var(--ok); border: 1px solid rgba(102, 187, 106, 0.35); }
+.pill.warn { background: rgba(255, 167, 38, 0.14); color: var(--warn); border: 1px solid rgba(255, 167, 38, 0.35); }
+.pill.err { background: rgba(255, 82, 82, 0.14); color: var(--err); border: 1px solid rgba(255, 82, 82, 0.35); }
 .pill.idle { background: var(--bg-2); color: var(--fg-muted); border: 1px solid var(--border); }
 
 .empty-state {
@@ -1572,8 +1577,8 @@ try {
   function makeHelix() {
     const group = new THREE.Group();
     const points = 180, radius = 7, height = 36;
-    const mat1 = new THREE.LineBasicMaterial({ color: 0x6ee7b7, transparent: true, opacity: 0.45 });
-    const mat2 = new THREE.LineBasicMaterial({ color: 0x00d4ff, transparent: true, opacity: 0.45 });
+    const mat1 = new THREE.LineBasicMaterial({ color: 0xd4af37, transparent: true, opacity: 0.50 });
+    const mat2 = new THREE.LineBasicMaterial({ color: 0x4d9fff, transparent: true, opacity: 0.45 });
     const pts1 = [], pts2 = [];
     for (let i = 0; i < points; i++) {
       const t = (i / points) * Math.PI * 2 * 4;
@@ -1583,7 +1588,7 @@ try {
     }
     group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts1), mat1));
     group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts2), mat2));
-    const rungMat = new THREE.LineBasicMaterial({ color: 0xb794f4, transparent: true, opacity: 0.25 });
+    const rungMat = new THREE.LineBasicMaterial({ color: 0xf0c674, transparent: true, opacity: 0.30 });
     for (let i = 0; i < points; i += 3) {
       const t = (i / points) * Math.PI * 2 * 4;
       const y = (i / points - 0.5) * height;
@@ -1606,7 +1611,7 @@ try {
   }
   partGeom.setAttribute('position', new THREE.BufferAttribute(partPos, 3));
   scene.add(new THREE.Points(partGeom, new THREE.PointsMaterial({
-    color: 0x6ee7b7, size: 0.08, transparent: true, opacity: 0.4,
+    color: 0xd4af37, size: 0.08, transparent: true, opacity: 0.45,
   })));
 
   let mouseX = 0, mouseY = 0;
