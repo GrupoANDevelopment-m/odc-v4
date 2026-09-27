@@ -5,20 +5,27 @@ background, exposed under /.
 
 Endpoints:
   GET  /                          — main HTML (3D UI)
-  GET  /api/info                   — provider/model/tools/skills
-  GET  /api/metrics                — live session metrics
-  POST /api/chat                   — run a turn (async, returns report)
-  GET  /api/sessions               — list sessions
-  POST /api/sessions/new           — start new session
-  POST /api/sessions/select        — switch session
-  GET  /api/models                 — list local Ollama models
-  POST /api/models/use             — set active local model
-  POST /api/models/pull            — pull a new model
-  POST /api/models/delete          — remove a model
-  GET  /api/training/stats         — dataset stats
-  POST /api/training/export        — export curated dataset
-  POST /api/training/start         — start fine-tune
-  GET  /api/training/status        — last fine-tune status
+  GET  /api/info                  — provider/model/tools/skills
+  GET  /api/metrics               — live session metrics
+  POST /api/chat                  — run a turn (async, returns report)
+  GET  /api/sessions              — list sessions
+  POST /api/sessions/new          — start new session
+  POST /api/sessions/select       — switch session
+  GET  /api/models                — list local Ollama models
+  POST /api/models/use            — set active local model
+  POST /api/models/pull           — pull a new model
+  POST /api/models/delete         — remove a model
+  GET  /api/training/stats        — dataset stats
+  POST /api/training/export       — export curated dataset
+  POST /api/training/start        — start fine-tune (Modelfile gen)
+  GET  /api/training/status       — last fine-tune status
+  POST /api/specialize/run        — full specialization wizard
+  POST /api/specialize/preview    — preview constitutional gate
+  GET  /api/system/config         — load workspace/web/brain/sandbox
+  POST /api/system/config         — save workspace/web/brain/sandbox
+  DELETE /api/system/config       — reset to defaults
+  POST /api/system/install-ollama — one-click Ollama install
+  POST /api/system/install-model  — one-click model install
 
 Run with:
     odc web                 # http://127.0.0.1:8765
@@ -30,6 +37,9 @@ import argparse
 import asyncio
 import json
 import os
+import platform
+import shutil
+import subprocess
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -39,11 +49,9 @@ from odc.observability import get_logger, setup_logging
 
 log = get_logger("odc.web")
 
-# ── Resolve paths to bundled assets ─────────────────────────────
 _HERE = Path(__file__).resolve().parent
 INDEX_HTML = (_HERE / "index.html").read_text(encoding="utf-8")
 
-# Lazy agent import (avoid circular)
 _agent_lock = threading.Lock()
 _agent_instance: Any = None
 
@@ -65,7 +73,6 @@ def _get_agent():
 
 def _get_info() -> dict[str, Any]:
     from odc import Config
-
     cfg = Config()
     return {
         "provider": cfg.llm_provider,
@@ -93,31 +100,27 @@ def _run_task(text: str, session_id: str | None = None) -> dict[str, Any]:
 
 
 def _get_metrics() -> dict[str, Any]:
-    """Live session metrics — pulls from ops store + agent state."""
     from odc import Config
     from odc.observability.ops import OpsStore
 
     cfg = Config()
     ops_path = cfg.data_dir / "ops" / "metrics.db"
-    brain = {"name": "primary", "detail": cfg.llm_provider}
-
+    summary: dict[str, Any] = {}
     if ops_path.exists():
         try:
-            store = OpsStore(ops_path)
-            summary = store.summary()
+            summary = OpsStore(ops_path).summary()
         except Exception:
-            summary = {}
-    else:
-        summary = {}
+            pass
 
-    # Check local brain
+    brain = {"name": "primary", "detail": cfg.llm_provider}
     try:
         from odc.llm.local import LocalBrain
-        brain_status = LocalBrain(cfg).status()
-        if brain_status.get("installed"):
-            brain = {"name": "local", "detail": f"{brain_status['installed']} model(s)"}
+        s = LocalBrain(cfg).status()
+        if s.get("reachable"):
+            brain = {"name": s.get("active") or "local-ready",
+                     "detail": f"{s['installed']} model(s) at {s['base_url']}"}
         else:
-            brain = {"name": "primary", "detail": cfg.llm_provider}
+            brain = {"name": "primary", "detail": f"{cfg.llm_provider} (local brain offline)"}
     except Exception:
         pass
 
@@ -134,7 +137,6 @@ def _get_metrics() -> dict[str, Any]:
 
 
 def _list_sessions() -> dict[str, Any]:
-    """List persisted sessions from Osiris memory."""
     try:
         from odc import Config
         from odc.mcp.osiris import OsirisMemory
@@ -170,13 +172,131 @@ def _age_str(ts: int | None) -> str:
     return f"{delta//86400}d ago"
 
 
+# ── system config persistence ──────────────────────────────────
+def _config_path():
+    from odc import Config
+    return Path(getattr(Config(), "data_dir", "./data")) / "config.json"
+
+
+DEFAULT_CONFIG = {
+    "workspace": {
+        "allowed_roots": [],
+        "deny_patterns": [".pem", "id_rsa", ".env"],
+        "max_file_size_mb": 50,
+    },
+    "web": {
+        "allowed_domains": [],
+        "denied_domains": [],
+        "allowed_schemes": ["http", "https"],
+        "deny_private_ips": True,
+    },
+    "brain": {
+        "base_url": "http://127.0.0.1:11434",
+        "auto_start": False,
+    },
+    "sandbox": {
+        "enabled": False,
+        "runner": "subprocess",
+        "cpu_seconds": 30,
+        "memory_mb": 256,
+    },
+}
+
+
+def _load_system_config() -> dict[str, Any]:
+    path = _config_path()
+    if not path.exists():
+        return json.loads(json.dumps(DEFAULT_CONFIG))  # deep copy
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return json.loads(json.dumps(DEFAULT_CONFIG))
+
+
+def _save_system_config(cfg: dict[str, Any]) -> None:
+    path = _config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+
+
+def _reset_system_config() -> dict[str, Any]:
+    cfg = json.loads(json.dumps(DEFAULT_CONFIG))
+    _save_system_config(cfg)
+    return cfg
+
+
+# ── install helpers ─────────────────────────────────────────────
+def _detect_platform() -> str:
+    s = platform.system().lower()
+    if s == "linux": return "linux"
+    if s == "darwin": return "macos"
+    return s
+
+
+def _install_ollama_command() -> list[str]:
+    """Return the platform-specific command to install Ollama."""
+    plat = _detect_platform()
+    if plat == "linux":
+        # Official installer
+        return ["sh", "-c", "curl -fsSL https://ollama.com/install.sh | sh"]
+    if plat == "macos":
+        # Try brew first, then download
+        if shutil.which("brew"):
+            return ["brew", "install", "ollama"]
+        return ["sh", "-c", "curl -fsSL https://ollama.com/install.sh | sh"]
+    # Windows — out of scope; return empty to signal not supported
+    return []
+
+
+def _install_ollama(timeout: int = 600) -> dict[str, Any]:
+    """Run the platform-appropriate install command. Returns dict."""
+    cmd = _install_ollama_command()
+    if not cmd:
+        return {"ok": False, "error": f"unsupported platform: {_detect_platform()}"}
+    log.info("install-ollama: running %s", cmd)
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return {
+            "ok": proc.returncode == 0,
+            "returncode": proc.returncode,
+            "output": (proc.stdout or "")[-4000:],
+            "stderr": (proc.stderr or "")[-4000:],
+        }
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": f"install timed out after {timeout}s"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def _pull_model_via_ollama(name: str, timeout: int = 1800) -> dict[str, Any]:
+    """Pull a model using the `ollama` CLI as fallback."""
+    binary = shutil.which("ollama")
+    if not binary:
+        return {"ok": False, "error": "ollama CLI not found in PATH"}
+    try:
+        proc = subprocess.run(
+            [binary, "pull", name],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        return {
+            "ok": proc.returncode == 0,
+            "returncode": proc.returncode,
+            "output": (proc.stdout or "")[-4000:],
+            "stderr": (proc.stderr or "")[-4000:],
+        }
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": f"pull timed out after {timeout}s"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+# ── HTTP handler ────────────────────────────────────────────────
 class Handler(BaseHTTPRequestHandler):
     """Single handler — routes by path."""
 
     def log_message(self, fmt, *args):
         log.info("%s - %s", self.address_string(), fmt % args)
 
-    # ── helpers ──
     def _send_json(self, code: int, payload: Any) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
@@ -198,7 +318,6 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.rfile.read(ln).decode("utf-8") if ln else "{}"
         return json.loads(raw)
 
-    # ── GET routes ──
     def do_GET(self) -> None:
         path = self.path.split("?")[0]
         try:
@@ -216,15 +335,16 @@ class Handler(BaseHTTPRequestHandler):
                 self._handle_training_stats()
             elif path == "/api/training/status":
                 self._handle_training_status()
+            elif path == "/api/system/config":
+                self._send_json(200, _load_system_config())
             elif path == "/favicon.ico":
                 self._send_text(204, b"", "image/x-icon")
             else:
                 self._send_text(404, b"not found", "text/plain")
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             log.exception("GET %s failed", path)
             self._send_json(500, {"error": f"{type(e).__name__}: {e}"})
 
-    # ── POST routes ──
     def do_POST(self) -> None:
         path = self.path.split("?")[0]
         try:
@@ -256,52 +376,87 @@ class Handler(BaseHTTPRequestHandler):
                 self._handle_training_export()
             elif path == "/api/training/start":
                 self._handle_training_start()
+            elif path == "/api/specialize/run":
+                self._handle_specialize_run(data)
+            elif path == "/api/specialize/preview":
+                self._handle_specialize_preview(data)
+            elif path == "/api/system/config":
+                _save_system_config(data)
+                self._send_json(200, {"ok": True, "saved": data})
+            elif path == "/api/system/install-ollama":
+                self._send_json(200, _install_ollama())
+            elif path == "/api/system/install-model":
+                name = data.get("name", "").strip()
+                if not name:
+                    self._send_json(400, {"error": "name required"})
+                    return
+                self._send_json(200, _pull_model_via_ollama(name))
             else:
                 self._send_text(404, b"not found", "text/plain")
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             log.exception("POST %s failed", path)
             self._send_json(500, {"error": f"{type(e).__name__}: {e}"})
 
-    # ── models (Local Brain) ──
+    def do_DELETE(self) -> None:
+        path = self.path.split("?")[0]
+        try:
+            if path == "/api/system/config":
+                cfg = _reset_system_config()
+                self._send_json(200, {"ok": True, "reset": cfg})
+            else:
+                self._send_text(404, b"not found", "text/plain")
+        except Exception as e:
+            self._send_json(500, {"error": str(e)})
+
+    # ── models ──
     def _handle_models_list(self) -> None:
         from odc import Config
-        from odc.llm.local import LocalBrain
-        try:
-            brain = LocalBrain(Config())
-            data = brain.list_models()
-            self._send_json(200, {"models": data})
-        except Exception as e:
-            self._send_json(200, {"models": [], "error": str(e), "hint": "Install Ollama: https://ollama.com"})
+        from odc.llm.local import LocalBrain, get_recommended
+        cfg = Config()
+        brain = LocalBrain(cfg)
+        models = brain.list_models()
+        active = brain.get_active()
+        # If config has a base_url override, use it
+        syscfg = _load_system_config()
+        if syscfg.get("brain", {}).get("base_url"):
+            brain_custom = LocalBrain(cfg, base_url=syscfg["brain"]["base_url"])
+            models = brain_custom.list_models()
+        self._send_json(200, {
+            "models": models,
+            "recommended": get_recommended(),
+            "active": active,
+            "base_url": syscfg.get("brain", {}).get("base_url", "http://127.0.0.1:11434"),
+        })
 
     def _handle_models_use(self, data: dict) -> None:
         from odc import Config
         from odc.llm.local import LocalBrain
-        name = data.get("name")
+        name = data.get("name", "")
         if not name:
             self._send_json(400, {"error": "name required"})
             return
-        LocalBrain(Config()).set_active(name)
-        self._send_json(200, {"ok": True, "active": name})
+        r = LocalBrain(Config()).set_active(name)
+        self._send_json(200, r)
 
     def _handle_models_pull(self, data: dict) -> None:
         from odc import Config
         from odc.llm.local import LocalBrain
-        name = data.get("name")
+        name = data.get("name", "")
         if not name:
             self._send_json(400, {"error": "name required"})
             return
-        result = LocalBrain(Config()).pull(name)
-        self._send_json(200, result)
+        r = LocalBrain(Config()).pull(name)
+        self._send_json(200, r)
 
     def _handle_models_delete(self, data: dict) -> None:
         from odc import Config
         from odc.llm.local import LocalBrain
-        name = data.get("name")
+        name = data.get("name", "")
         if not name:
             self._send_json(400, {"error": "name required"})
             return
-        result = LocalBrain(Config()).delete(name)
-        self._send_json(200, result)
+        r = LocalBrain(Config()).delete(name)
+        self._send_json(200, r)
 
     # ── training ──
     def _handle_training_stats(self) -> None:
@@ -309,7 +464,9 @@ class Handler(BaseHTTPRequestHandler):
         from odc.training import TrainingStore
         try:
             store = TrainingStore(Config())
-            self._send_json(200, store.stats())
+            stats = store.stats()
+            stats["last_run"] = store.last_run()
+            self._send_json(200, stats)
         except Exception as e:
             self._send_json(200, {"error": str(e), "total": 0, "passed": 0, "bipolar": 0})
 
@@ -327,8 +484,7 @@ class Handler(BaseHTTPRequestHandler):
         from odc.training import TrainingStore
         try:
             store = TrainingStore(Config())
-            result = store.export_dataset()
-            self._send_json(200, result)
+            self._send_json(200, store.export_dataset())
         except Exception as e:
             self._send_json(500, {"error": str(e)})
 
@@ -337,10 +493,94 @@ class Handler(BaseHTTPRequestHandler):
         from odc.training import TrainingStore
         try:
             store = TrainingStore(Config())
-            result = store.start_finetune()
-            self._send_json(200, result)
+            self._send_json(200, store.start_finetune())
         except Exception as e:
             self._send_json(500, {"error": str(e)})
+
+    # ── specialize ──
+    def _handle_specialize_run(self, data: dict) -> None:
+        from odc import Config
+        from odc.training import TrainingStore
+
+        base_model = (data.get("base_model") or "").strip()
+        domain = (data.get("domain") or "").strip()
+        requirements = (data.get("requirements") or "").strip()
+        if not base_model:
+            self._send_json(400, {"error": "base_model required"})
+            return
+        if not domain:
+            self._send_json(400, {"error": "domain required"})
+            return
+
+        cfg = Config()
+        store = TrainingStore(cfg)
+        # 1. Export curated dataset
+        export_result = store.export_dataset()
+        # 2. Set the active base model
+        try:
+            from odc.llm.local import LocalBrain
+            LocalBrain(cfg).set_active(base_model)
+        except Exception as e:
+            log.warning("set_active failed: %s", e)
+        # 3. Generate Modelfile with specialization instructions
+        from odc.training.store import TrainingStore as TS
+        # Patch the Modelfile with specialization context
+        modelfile = cfg.data_dir / "training" / "Modelfile"
+        modelfile.parent.mkdir(parents=True, exist_ok=True)
+        spec_text = (
+            f"# Specialization for domain: {domain}\n"
+            f"# Requirements: {requirements}\n"
+            f"# Base model: {base_model}\n"
+            f"# Generated: {_now()}\n\n"
+            f"FROM {base_model}\n\n"
+            'SYSTEM """You are a specialized assistant for the domain: ' + domain + '.\n'
+            f'Your tasks: {requirements}\n'
+            'Reason step by step. Cite evidence. Never claim certainty beyond '
+            'your evidence tier. Use the constitutional framing provided by ODC."""\n'
+        )
+        modelfile.write_text(spec_text, encoding="utf-8")
+        # 4. Mark fine-tune as ready
+        run = store.start_finetune()
+        self._send_json(200, {
+            "ok": True,
+            "export": export_result,
+            "modelfile": str(modelfile),
+            "specialization": {
+                "base_model": base_model,
+                "domain": domain,
+                "requirements": requirements,
+            },
+            "next_step": (
+                f"Run: ollama create odc-{domain} -f {modelfile}\n"
+                "Then: ollama run odc-" + domain
+            ),
+        })
+
+    def _handle_specialize_preview(self, data: dict) -> None:
+        from odc import Config
+        from odc.training import TrainingStore
+        cfg = Config()
+        store = TrainingStore(cfg)
+        # Show what would be kept / dropped without writing
+        from odc.training.curator import DatasetCurator
+        c = DatasetCurator(cfg.data_dir)
+        raw = c._read_field_outcomes()
+        audit = c._read_audit_trail()
+        sandbox = c._read_sandbox_log()
+        self._send_json(200, {
+            "raw_field_outcomes": len(raw),
+            "raw_audit_rows": len(audit),
+            "raw_sandbox_results": len(sandbox),
+            "constitutional_tiers_accepted": ["AUTHORITATIVE_API", "DIRECT_OBSERVATION", "CORROBORATED"],
+            "bipolar_threshold": "minority/total >= 15%",
+            "min_samples_per_pattern": 5,
+            "scrub_patterns": [
+                "OpenAI keys (sk-...)", "NVIDIA keys (nvapi-...)",
+                "GitHub tokens (ghp_...)", "AWS access keys (AKIA...)",
+                "PEM private keys", "SSN", "credit cards",
+                "emails", "absolute paths",
+            ],
+        })
 
     # ── sessions ──
     def _new_session(self) -> str:
@@ -349,19 +589,22 @@ class Handler(BaseHTTPRequestHandler):
             from odc.mcp.osiris import OsirisMemory
             cfg = Config()
             mem = OsirisMemory(cfg.data_dir / "memory" / "osiris.db")
-            sid = mem.create_session(title="web-session")
-            return sid
+            return mem.create_session(title="web-session")
         except Exception as e:
             log.warning("new session failed: %s", e)
             return ""
 
 
+def _now() -> str:
+    import time
+    return time.strftime("%Y-%m-%d %H:%M:%S")
+
+
 def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
-    """Run the web server. Blocks."""
     httpd = ThreadingHTTPServer((host, port), Handler)
     print(f"ODC v4 web: http://{host}:{port}")
     print("Premium 3D interface (DNA Digital theme).")
-    print("Endpoints: /api/info /api/chat /api/models /api/training /api/sessions /api/metrics")
+    print("Subpages: / Chat | / Brain | / Training | / Specialize | / Settings")
     print("Press Ctrl-C to stop.")
     try:
         httpd.serve_forever()
