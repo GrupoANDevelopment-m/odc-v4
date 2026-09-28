@@ -1012,6 +1012,31 @@ body {
       </div>
 
       <div class="card">
+        <h3>Auto-extension (agent builds its own tools)</h3>
+        <div style="font: 11px var(--font-mono); color: var(--fg-muted); margin-bottom: 12px; line-height: 1.5;">
+          Allows the agent to create / repair / load tools and skills at runtime via <span style="color: var(--accent);">dynamic.tool_create</span>, <span style="color: var(--accent);">dynamic.skill_create</span>, <span style="color: var(--accent);">dynamic.tool_repair</span>. All creations pass an AST safety check before being applied. <strong style="color: var(--warn);">Default: ON</strong> (per design — agent should extend itself when needed).
+        </div>
+        <div class="form-row">
+          <label><input type="checkbox" id="set-ae-tool-create" checked> Allow dynamic.tool_create (build new tools)</label>
+        </div>
+        <div class="form-row">
+          <label><input type="checkbox" id="set-ae-skill-create" checked> Allow dynamic.skill_create (build new skills)</label>
+        </div>
+        <div class="form-row">
+          <label><input type="checkbox" id="set-ae-tool-repair" checked> Allow dynamic.tool_repair (fix broken tools)</label>
+        </div>
+        <div class="form-row">
+          <label><input type="checkbox" id="set-ae-tool-load" checked> Allow dynamic.tool_load (load from disk)</label>
+        </div>
+        <div class="form-row">
+          <label><input type="checkbox" id="set-ae-require-safety" checked> Require AST safety check before applying</label>
+        </div>
+        <div class="btn-row" style="margin-top: 8px;">
+          <button class="btn" id="set-ae-save-btn">Save auto-extension settings</button>
+        </div>
+      </div>
+
+      <div class="card">
         <h3>Sandbox (dynamic tool execution)</h3>
         <div class="form-row">
           <label><input type="checkbox" id="set-sandbox-enabled"> Enable sandbox (default OFF in production)</label>
@@ -1477,8 +1502,42 @@ async function loadSettings() {
       document.getElementById('set-sandbox-cpu').value = d.sandbox.cpu_seconds ?? 30;
       document.getElementById('set-sandbox-mem').value = d.sandbox.memory_mb ?? 256;
     }
+    if (d.auto_extend) {
+      const ae = d.auto_extend;
+      document.getElementById('set-ae-tool-create').checked = !!ae.tool_create;
+      document.getElementById('set-ae-skill-create').checked = !!ae.skill_create;
+      document.getElementById('set-ae-tool-repair').checked = !!ae.tool_repair;
+      document.getElementById('set-ae-tool-load').checked = !!ae.tool_load;
+      document.getElementById('set-ae-require-safety').checked = !!ae.require_safety;
+    }
   } catch (e) { /* offline */ }
 }
+document.getElementById('set-ae-save-btn').addEventListener('click', async () => {
+  const ae = {
+    tool_create: document.getElementById('set-ae-tool-create').checked,
+    skill_create: document.getElementById('set-ae-skill-create').checked,
+    tool_repair: document.getElementById('set-ae-tool-repair').checked,
+    tool_load: document.getElementById('set-ae-tool-load').checked,
+    require_safety: document.getElementById('set-ae-require-safety').checked,
+  };
+  const out = document.getElementById('set-output');
+  out.classList.remove('hidden');
+  out.textContent = 'saving auto-extension...\n';
+  try {
+    // Save full config including auto_extend
+    const full = await (await fetch('/api/system/config')).json();
+    full.auto_extend = ae;
+    const r = await fetch('/api/system/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(full),
+    });
+    const d = await r.json();
+    out.textContent += JSON.stringify(d.auto_extend || ae, null, 2);
+  } catch (e) {
+    out.textContent += `\nfailed: ${e.message}`;
+  }
+});
 document.getElementById('set-save-btn').addEventListener('click', async () => {
   const cfg = {
     workspace: {
@@ -1500,6 +1559,13 @@ document.getElementById('set-save-btn').addEventListener('click', async () => {
       runner: document.getElementById('set-sandbox-runner').value,
       cpu_seconds: parseInt(document.getElementById('set-sandbox-cpu').value, 10),
       memory_mb: parseInt(document.getElementById('set-sandbox-mem').value, 10),
+    },
+    auto_extend: {
+      tool_create: document.getElementById('set-ae-tool-create').checked,
+      skill_create: document.getElementById('set-ae-skill-create').checked,
+      tool_repair: document.getElementById('set-ae-tool-repair').checked,
+      tool_load: document.getElementById('set-ae-tool-load').checked,
+      require_safety: document.getElementById('set-ae-require-safety').checked,
     },
   };
   const out = document.getElementById('set-output');

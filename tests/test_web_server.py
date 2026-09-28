@@ -478,3 +478,82 @@ class TestNewEndpoints:
             assert len(d["scrub_patterns"]) >= 5
         finally:
             httpd.shutdown()
+
+    def test_auto_extend_status_returns_defaults(self):
+        port, httpd = _start_test_server()
+        try:
+            with patch("odc.web.server._load_system_config",
+                       return_value=DEFAULT_CONFIG):
+                r = _get(port, "/api/auto-extend/status")
+                d = json.loads(r.read())
+            assert d["tool_create"] is True
+            assert d["skill_create"] is True
+            assert d["require_safety"] is True
+        finally:
+            httpd.shutdown()
+
+    def test_auto_extend_toggle(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("odc.web.server._config_path",
+                            lambda: tmp_path / "config.json")
+        port, httpd = _start_test_server()
+        try:
+            r = _post(port, "/api/auto-extend/toggle",
+                      {"key": "tool_create", "value": False})
+            d = json.loads(r.read())
+            assert d["ok"] is True
+            assert d["auto_extend"]["tool_create"] is False
+        finally:
+            httpd.shutdown()
+
+    def test_auto_extend_toggle_rejects_unknown_key(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("odc.web.server._config_path",
+                            lambda: tmp_path / "config.json")
+        port, httpd = _start_test_server()
+        try:
+            try:
+                _post(port, "/api/auto-extend/toggle",
+                      {"key": "not_a_key", "value": True})
+            except urllib.error.HTTPError as e:
+                assert e.code == 400
+        finally:
+            httpd.shutdown()
+
+    def test_auto_extend_toggle_rejects_disabling_safety(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("odc.web.server._config_path",
+                            lambda: tmp_path / "config.json")
+        port, httpd = _start_test_server()
+        try:
+            try:
+                _post(port, "/api/auto-extend/toggle",
+                      {"key": "require_safety", "value": False})
+            except urllib.error.HTTPError as e:
+                assert e.code == 400
+        finally:
+            httpd.shutdown()
+
+    def test_auto_extend_enable_all(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("odc.web.server._config_path",
+                            lambda: tmp_path / "config.json")
+        port, httpd = _start_test_server()
+        try:
+            r = _post(port, "/api/auto-extend/enable-all", {})
+            d = json.loads(r.read())
+            assert d["ok"] is True
+            assert d["auto_extend"]["tool_create"] is True
+            assert d["auto_extend"]["skill_create"] is True
+        finally:
+            httpd.shutdown()
+
+    def test_auto_extend_disable_all_keeps_safety_on(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("odc.web.server._config_path",
+                            lambda: tmp_path / "config.json")
+        port, httpd = _start_test_server()
+        try:
+            r = _post(port, "/api/auto-extend/disable-all", {})
+            d = json.loads(r.read())
+            assert d["ok"] is True
+            assert d["auto_extend"]["tool_create"] is False
+            # Safety check MUST remain on
+            assert d["auto_extend"]["require_safety"] is True
+        finally:
+            httpd.shutdown()

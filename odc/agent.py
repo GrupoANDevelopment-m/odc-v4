@@ -90,6 +90,13 @@ class Agent:
             # Same Python process, no external deps.
             from odc.code import all_code_tools as _code_tools
             from odc.code import all_dynamic_tools as _dyn_tools
+            # Load auto-extend gate state from <data_dir>/config.json
+            # (writes by the web UI). Default: everything ON.
+            from odc.code.auto_extend import load_from_config
+            try:
+                load_from_config(self.config.data_dir / "config.json")
+            except Exception:
+                pass
             from odc.code import DynamicPaths, set_dynamic_paths, set_tool_registry
             from odc.cognitive import all_cognitive_tools as _cog_tools
             from odc.cognitive.tools import set_paths as _set_cog_paths

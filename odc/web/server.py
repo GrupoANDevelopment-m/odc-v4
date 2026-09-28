@@ -200,6 +200,56 @@ DEFAULT_CONFIG = {
         "cpu_seconds": 30,
         "memory_mb": 256,
     },
+    # Auto-extension: allow the agent to build its own tools/skills
+    # at runtime via dynamic.tool_create / dynamic.skill_create.
+    # ON by default — the SYSTEM_PROMPT tells the agent to extend
+    # itself when a needed capability is missing. User can toggle OFF.
+    "auto_extend": {
+        "tool_create": True,    # dynamic.tool_create (build new tools)
+        "skill_create": True,   # dynamic.skill_create (build new skills)
+        "tool_repair": True,    # dynamic.tool_repair (fix broken tools)
+        "tool_load": True,      # dynamic.tool_load (load saved tool from disk)
+        "require_safety": True, # AST-based safety check before applying
+    },
+    # Sensory panel: live OSINT sensors
+    "osint": {
+        "enabled": True,
+        "auto_inject": True,   # include OSINT tools in prompts proactively
+        "endpoints_no_key": ["flights", "earthquakes", "cve", "bitcoin",
+                              "crypto_prices", "space_weather",
+                              "weather", "wikipedia"],
+        "endpoints_keyed": ["sanctions", "satellites", "fires",
+                              "eonet", "news"],
+    },
+    # Reflexion: persistent learning loop
+    "reflexion": {
+        "enabled": True,
+        "store_outcomes": True,
+        "wisdom_not_trauma": True,  # only patterns past exhaustion gate
+    },
+    # Refinement: Level 9 self-modification
+    "refinement": {
+        "enabled": True,
+        "exhaustion_gate": True,
+        "constitutional_guard": True,
+        "sandbox_verify": True,
+        "min_samples_per_pattern": 5,
+        "bipolar_ratio": 0.15,
+    },
+    # MCP persistent memory substrate
+    "memory": {
+        "backend": "sqlite",  # or "postgres" in future
+        "retention_days": 365,
+        "cross_session_recall": False,  # conversation isolation default
+        "explicit_recall_only": True,
+    },
+    # Local brain (secondary LLM)
+    "local_brain": {
+        "enabled": False,  # user must enable after install
+        "provider": "ollama",
+        "model": "",
+        "auto_switch": False,  # when set, route tool calls through local brain
+    },
 }
 
 
@@ -333,6 +383,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._handle_models_list()
             elif path == "/api/training/stats":
                 self._handle_training_stats()
+            elif path == "/api/auto-extend/status":
+                cfg = _load_system_config()
+                self._send_json(200, cfg.get("auto_extend", {}))
             elif path == "/api/training/status":
                 self._handle_training_status()
             elif path == "/api/system/config":
@@ -382,7 +435,72 @@ class Handler(BaseHTTPRequestHandler):
                 self._handle_specialize_preview(data)
             elif path == "/api/system/config":
                 _save_system_config(data)
+                # Sync auto-extend gate to the agent module so it applies
+                # immediately without restart
+                try:
+                    from odc.code.auto_extend import (
+                        all_gates, save_to_config, load_from_config
+                    )
+                    ae = data.get("auto_extend", {})
+                    # Load from the just-saved config (re-loads gate state)
+                    from pathlib import Path
+                    load_from_config(_config_path())
+                except Exception as e:
+                    log.warning("auto_extend sync failed: %s", e)
                 self._send_json(200, {"ok": True, "saved": data})
+            elif path == "/api/auto-extend/toggle":
+                # Toggle one flag in auto_extend
+                cfg = _load_system_config()
+                ae = cfg.setdefault("auto_extend", {})
+                key = data.get("key")
+                value = data.get("value")
+                if key not in ae:
+                    self._send_json(400, {"error": f"unknown key: {key}",
+                                           "available": list(ae.keys())})
+                    return
+                # require_safety cannot be turned off (system invariant)
+                if key == "require_safety" and not value:
+                    self._send_json(400, {"error": "require_safety is a system invariant and cannot be disabled"})
+                    return
+                ae[key] = bool(value)
+                cfg["auto_extend"] = ae
+                _save_system_config(cfg)
+                # Sync the in-memory gate module
+                try:
+                    from odc.code.auto_extend import load_from_config
+                    load_from_config(_config_path())
+                except Exception:
+                    pass
+                self._send_json(200, {"ok": True, "auto_extend": ae})
+            elif path == "/api/auto-extend/enable-all":
+                cfg = _load_system_config()
+                ae = cfg.setdefault("auto_extend", {})
+                for k in ae:
+                    ae[k] = True
+                cfg["auto_extend"] = ae
+                _save_system_config(cfg)
+                try:
+                    from odc.code.auto_extend import load_from_config
+                    load_from_config(_config_path())
+                except Exception:
+                    pass
+                self._send_json(200, {"ok": True, "auto_extend": ae})
+            elif path == "/api/auto-extend/disable-all":
+                cfg = _load_system_config()
+                ae = cfg.setdefault("auto_extend", {})
+                # Never disable safety check — that's a system invariant
+                for k in ae:
+                    if k != "require_safety":
+                        ae[k] = False
+                cfg["auto_extend"] = ae
+                _save_system_config(cfg)
+                try:
+                    from odc.code.auto_extend import load_from_config
+                    load_from_config(_config_path())
+                except Exception:
+                    pass
+                self._send_json(200, {"ok": True, "auto_extend": ae,
+                                       "note": "require_safety kept ON (system invariant)"})
             elif path == "/api/system/install-ollama":
                 self._send_json(200, _install_ollama())
             elif path == "/api/system/install-model":

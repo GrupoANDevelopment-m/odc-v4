@@ -87,6 +87,14 @@ def get_dynamic_paths() -> DynamicPaths:
     requires_confirm=True,
 )
 async def dynamic_tool_create(name: str, description: str, body: str) -> dict[str, Any]:
+    # Auto-extension gate: respect user preference
+    from odc.code.auto_extend import is_allowed
+    if not is_allowed("dynamic.tool_create"):
+        return {
+            "ok": False,
+            "error": "auto-extension disabled by user (Settings -> Auto-extension)",
+            "name": name,
+        }
     paths = get_dynamic_paths()
     rec, safety = write_tool(paths, name=name, body=body, description=description)
     if not safety.ok:
@@ -140,6 +148,13 @@ async def dynamic_tool_create(name: str, description: str, body: str) -> dict[st
     },
 )
 async def dynamic_tool_load(name: str) -> dict[str, Any]:
+    from odc.code.auto_extend import is_allowed
+    if not is_allowed("dynamic.tool_load"):
+        return {
+            "ok": False,
+            "error": "auto-extension disabled (tool_load off)",
+            "name": name,
+        }
     paths = get_dynamic_paths()
     tool_obj = load_tool(name, paths)
     if tool_obj is None:
@@ -180,6 +195,13 @@ async def dynamic_tool_load(name: str) -> dict[str, Any]:
     },
 )
 async def dynamic_tool_repair(name: str, body: str, reason: str) -> dict[str, Any]:
+    from odc.code.auto_extend import is_allowed
+    if not is_allowed("dynamic.tool_repair"):
+        return {
+            "ok": False,
+            "error": "auto-extension disabled (tool_repair off)",
+            "name": name,
+        }
     paths = get_dynamic_paths()
     target = paths.tools_dir / f"{name}.py"
     if not target.exists():
@@ -303,6 +325,13 @@ async def dynamic_tool_test(name: str, test_body: str) -> dict[str, Any]:
 async def dynamic_skill_create(
     name: str, description: str, triggers: list[str], body: str
 ) -> dict[str, Any]:
+    from odc.code.auto_extend import is_allowed
+    if not is_allowed("dynamic.skill_create"):
+        return {
+            "ok": False,
+            "error": "auto-extension disabled (skill_create off)",
+            "name": name,
+        }
     paths = get_dynamic_paths()
     skill_path = write_skill(
         paths, name=name, description=description, triggers=triggers, body=body
