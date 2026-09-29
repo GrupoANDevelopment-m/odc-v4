@@ -129,7 +129,8 @@ body {
   color: var(--fg);
   border-color: var(--border);
 }
-.topbar-nav a.active {
+.topbar-nav a.active,
+.topbar-nav a[href="#/visibility"].active {
   background: var(--panel-bright);
   color: var(--accent);
   border-color: var(--border-strong);
@@ -609,6 +610,72 @@ body {
 }
 .btn:hover { border-color: var(--border-strong); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn.active {
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.20), rgba(240, 198, 116, 0.16));
+  border-color: var(--border-strong);
+  color: var(--accent);
+}
+
+.vtab-panel.hidden { display: none; }
+
+/* tool / skill row */
+.cap-row {
+  padding: 10px 12px;
+  border-bottom: 1px dashed var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 12px;
+}
+.cap-row:last-child { border-bottom: none; }
+.cap-row .name {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 3px;
+}
+.cap-row .name .badge {
+  display: inline-block;
+  margin-left: 6px;
+  font: 9px var(--font-mono);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.cap-row .name .badge.se { background: rgba(255, 167, 38, 0.18); border-color: rgba(255, 167, 38, 0.4); color: var(--warn); }
+.cap-row .desc { color: var(--fg-dim); line-height: 1.5; font-size: 12px; }
+.cap-row .cat { font: 10px var(--font-mono); color: var(--fg-muted); text-align: right; }
+
+/* decision card */
+.dec-card {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.dec-card .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.dec-card .tool-name { font-family: var(--font-mono); color: var(--accent); font-weight: 600; }
+.dec-card .hash { font: 10px var(--font-mono); color: var(--fg-muted); }
+.dec-card .meta { font: 10px var(--font-mono); color: var(--fg-muted); margin-bottom: 6px; }
+.dec-card .payload {
+  background: var(--bg-0);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font: 10px var(--font-mono);
+  color: var(--fg-dim);
+  max-height: 120px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
 .btn.primary {
   background: linear-gradient(135deg, rgba(212, 175, 55, 0.20), rgba(240, 198, 116, 0.16));
   border-color: var(--border-strong);
@@ -746,6 +813,7 @@ body {
 
     <nav class="topbar-nav">
       <a href="#/" class="active" data-route="/">Chat</a>
+      <a href="#/visibility" data-route="/visibility">Visibility</a>
       <a href="#/brain" data-route="/brain">Brain</a>
       <a href="#/training" data-route="/training">Training</a>
       <a href="#/specialize" data-route="/specialize">Specialize</a>
@@ -892,6 +960,144 @@ body {
         </div>
         <div id="train-output" class="log hidden" style="margin-top: 12px;"></div>
       </div>
+    </div>
+
+    <!-- VISIBILITY subpage (transparency / observability) -->
+    <div class="subpage" id="subpage-visibility">
+      <div class="subpage-header">
+        <div class="subpage-title">Visibility</div>
+        <div class="subpage-sub">Operador: inspecione tools, skills, MCPs ativos, raciocinio cognitivo live, decisoes black-box, e faca upload de arquivos ate 500MB. Tudo reflete o estado real do agente.</div>
+      </div>
+
+      <!-- Internal tabs -->
+      <div style="display: flex; gap: 4px; margin-bottom: 16px; padding: 4px; background: var(--bg-2); border-radius: 8px; border: 1px solid var(--border);">
+        <button class="btn active" data-vtab="capab" style="flex: 1;">Tools &amp; Skills</button>
+        <button class="btn" data-vtab="mcps" style="flex: 1;">MCPs</button>
+        <button class="btn" data-vtab="cog" style="flex: 1;">Live Cognition</button>
+        <button class="btn" data-vtab="decisions" style="flex: 1;">Decisions</button>
+        <button class="btn" data-vtab="upload" style="flex: 1;">Upload</button>
+      </div>
+
+      <!-- TAB: Tools & Skills -->
+      <div id="vtab-capab" class="vtab-panel">
+        <div class="grid-2">
+          <div class="card">
+            <h3>Tools (<span id="tools-count">0</span> total)</h3>
+            <div style="font: 11px var(--font-mono); color: var(--fg-muted); margin-bottom: 12px;">
+              Categoria: <span id="tools-cats"></span>
+            </div>
+            <div class="form-row">
+              <input class="form-input" id="tools-filter" placeholder="filtrar por nome ou categoria...">
+            </div>
+            <div id="tools-list" style="max-height: 480px; overflow-y: auto;"></div>
+          </div>
+          <div>
+            <div class="card">
+              <h3>Skills (<span id="skills-count">0</span>)</h3>
+              <div id="skills-list"></div>
+            </div>
+            <div class="card">
+              <h3>Dynamic tools / skills criados pelo agente</h3>
+              <div id="dyn-list" class="empty-state">carregando...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: MCPs -->
+      <div id="vtab-mcps" class="vtab-panel hidden">
+        <div class="card">
+          <h3>MCP servers ativos</h3>
+          <div style="font: 11px var(--font-mono); color: var(--fg-muted); margin-bottom: 12px;">
+            MCP = Model Context Protocol. Tools persistentes que o agente chama para acessar memoria, decisoes e audit log.
+          </div>
+          <table style="width: 100%; border-collapse: collapse; font: 12px var(--font-mono);">
+            <thead>
+              <tr style="text-align: left; border-bottom: 1px solid var(--border);">
+                <th style="padding: 8px;">Tool</th>
+                <th style="padding: 8px;">Descricao</th>
+              </tr>
+            </thead>
+            <tbody id="mcps-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB: Live Cognition -->
+      <div id="vtab-cog" class="vtab-panel hidden">
+        <div class="grid-2">
+          <div class="card">
+            <h3>Perfil cognitivo</h3>
+            <div id="cog-profile"></div>
+          </div>
+          <div class="card">
+            <h3>Atividade recente</h3>
+            <div id="cog-timeline" style="max-height: 480px; overflow-y: auto;"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Heuristicas (<span id="cog-heuristics-count">0</span>) e reflexoes (<span id="cog-reflections-count">0</span>)</h3>
+          <div class="btn-row" style="margin-bottom: 12px;">
+            <button class="btn" id="cog-refresh-btn">Refresh</button>
+          </div>
+          <div class="grid-2">
+            <div>
+              <h4 style="font-size: 10px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 8px;">HEURISTICAS</h4>
+              <div id="cog-heuristics" class="log" style="max-height: 320px;"></div>
+            </div>
+            <div>
+              <h4 style="font-size: 10px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 8px;">REFLEXOES</h4>
+              <div id="cog-reflections" class="log" style="max-height: 320px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: Decisions (black box) -->
+      <div id="vtab-decisions" class="vtab-panel hidden">
+        <div class="card">
+          <h3>Black box decisions (audit trail HMAC-chained)</h3>
+          <div style="font: 11px var(--font-mono); color: var(--fg-muted); margin-bottom: 12px; line-height: 1.55;">
+            Cada decisao do agente fica registrada com hash HMAC encadeado. Use os filtros para auditar.
+          </div>
+          <div class="btn-row" style="margin-bottom: 12px;">
+            <input class="form-input" id="dec-tool-filter" placeholder="filtrar por tool (ex: fs.read)..." style="flex: 1; max-width: 320px;">
+            <select class="form-select" id="dec-allowed-filter" style="max-width: 200px;">
+              <option value="">todos os resultados</option>
+              <option value="true">apenas permitidos</option>
+              <option value="false">apenas bloqueados</option>
+            </select>
+            <button class="btn primary" id="dec-refresh-btn">Atualizar</button>
+          </div>
+          <div class="metric" style="font: 11px var(--font-mono); color: var(--fg-muted); margin-bottom: 8px;" id="dec-summary">—</div>
+          <div id="decisions-list" style="max-height: 540px; overflow-y: auto;"></div>
+        </div>
+      </div>
+
+      <!-- TAB: Upload -->
+      <div id="vtab-upload" class="vtab-panel hidden">
+        <div class="card">
+          <h3>Upload de arquivos (max 500MB por arquivo)</h3>
+          <div style="font: 11px var(--font-mono); color: var(--fg-muted); margin-bottom: 12px; line-height: 1.55;">
+            Arquivos ficam em <span style="color: var(--accent);">&lt;data_dir&gt;/uploads/</span> com prefixo UUID para evitar colisao. Use <span style="color: var(--accent);">fs.read uploads/&lt;filename&gt;</span> no chat para o agente acessar.
+          </div>
+          <div style="border: 2px dashed var(--border); border-radius: 12px; padding: 36px; text-align: center; cursor: pointer; transition: all 0.18s ease;" id="upload-drop">
+            <div style="font-size: 36px; color: var(--fg-muted); margin-bottom: 8px;">[arquivo]</div>
+            <div style="font-size: 14px; color: var(--fg); margin-bottom: 6px;">arraste e solte aqui, ou clique para selecionar</div>
+            <div style="font: 11px var(--font-mono); color: var(--fg-muted);">ate 500MB &mdash; qualquer tipo de arquivo</div>
+            <input type="file" id="upload-input" style="display:none;">
+          </div>
+          <div id="upload-progress" class="hidden" style="margin-top: 16px;">
+            <div style="font: 11px var(--font-mono); color: var(--fg-muted); margin-bottom: 6px;" id="upload-status">enviando...</div>
+            <div class="progress"><div class="progress-fill" id="upload-fill" style="width: 0%"></div></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Arquivos ja enviados</h3>
+          <div id="uploads-list"></div>
+        </div>
+      </div>
+
     </div>
 
     <!-- SPECIALIZE subpage -->
@@ -1096,12 +1302,14 @@ function navigate() {
   });
   document.querySelectorAll('.subpage').forEach(s => s.classList.remove('active'));
   document.getElementById('subpage-chat').classList.toggle('active', route === '/');
+  document.getElementById('subpage-visibility').classList.toggle('active', route === '/visibility');
   document.getElementById('subpage-brain').classList.toggle('active', route === '/brain');
   document.getElementById('subpage-training').classList.toggle('active', route === '/training');
   document.getElementById('subpage-specialize').classList.toggle('active', route === '/specialize');
   document.getElementById('subpage-settings').classList.toggle('active', route === '/settings');
   document.getElementById('sidebar').style.display = (route === '/') ? 'flex' : 'none';
 
+  if (route === '/visibility') loadVisibility();
   if (route === '/brain') loadBrain();
   if (route === '/training') loadTrainingStats();
   if (route === '/specialize') loadSpecialize();
@@ -1469,7 +1677,278 @@ document.getElementById('spec-preview-btn').addEventListener('click', async () =
   }
 });
 
-// ─── SETTINGS ───────────────────────────────────────────────────
+// ─── VISIBILITY (transparency / observability) ──────────────────
+async function loadVisibility() {
+  await Promise.all([loadCapab(), loadMCPs(), loadCognition(), loadDecisions(), loadUploads()]);
+}
+
+function switchVTab(name) {
+  document.querySelectorAll('#subpage-visibility .btn[data-vtab]').forEach(b => {
+    b.classList.toggle('active', b.dataset.vtab === name);
+  });
+  document.querySelectorAll('#subpage-visibility .vtab-panel').forEach(p => {
+    p.classList.toggle('hidden', p.id !== 'vtab-' + name);
+  });
+}
+
+document.querySelectorAll('#subpage-visibility .btn[data-vtab]').forEach(btn => {
+  btn.addEventListener('click', () => switchVTab(btn.dataset.vtab));
+});
+
+async function loadCapab() {
+  try {
+    const r = await fetch('/api/capabilities');
+    const d = await r.json();
+    document.getElementById('tools-count').textContent = d.total || 0;
+    const cats = Object.entries(d.categories || {})
+      .map(([k,v]) => `${k}:${v}`).join(' / ');
+    document.getElementById('tools-cats').textContent = cats;
+    document.getElementById('skills-count').textContent = (d.skills || []).length;
+
+    const toolsList = document.getElementById('tools-list');
+    toolsList.innerHTML = '';
+    (d.tools || []).forEach(t => {
+      const row = document.createElement('div');
+      row.className = 'cap-row';
+      row.dataset.search = (t.name + ' ' + t.category).toLowerCase();
+      row.innerHTML = `
+        <div style="flex: 1; min-width: 0;">
+          <div class="name">${escapeHtml(t.name)}${t.side_effect ? ' <span class="badge se">side-effect</span>' : ''}</div>
+          <div class="desc">${escapeHtml(t.description || '')}</div>
+        </div>
+        <div class="cat">${escapeHtml(t.category)}</div>
+      `;
+      toolsList.appendChild(row);
+    });
+    document.getElementById('tools-filter').oninput = (e) => {
+      const q = e.target.value.toLowerCase();
+      toolsList.querySelectorAll('.cap-row').forEach(r => {
+        r.style.display = (q === '' || r.dataset.search.includes(q)) ? '' : 'none';
+      });
+    };
+
+    const skillsList = document.getElementById('skills-list');
+    skillsList.innerHTML = '';
+    (d.skills || []).forEach(s => {
+      const div = document.createElement('div');
+      div.className = 'cap-row';
+      div.innerHTML = `
+        <div style="flex: 1;">
+          <div class="name">${escapeHtml(s.name)}</div>
+          <div class="desc">${escapeHtml(s.description)}</div>
+        </div>
+      `;
+      skillsList.appendChild(div);
+    });
+
+    const dynList = document.getElementById('dyn-list');
+    if ((d.dynamic_tools || []).length === 0 && (d.dynamic_skills || []).length === 0) {
+      dynList.innerHTML = '<div class="empty-state">nenhum tool ou skill criado pelo agente ainda</div>';
+    } else {
+      dynList.innerHTML = '';
+      (d.dynamic_tools || []).forEach(t => {
+        const div = document.createElement('div');
+        div.className = 'cap-row';
+        div.innerHTML = `<div style="flex: 1;"><div class="name">${escapeHtml(t.name)}</div><div class="desc">tool criado em ${escapeHtml(t.path)}</div></div>`;
+        dynList.appendChild(div);
+      });
+      (d.dynamic_skills || []).forEach(s => {
+        const div = document.createElement('div');
+        div.className = 'cap-row';
+        div.innerHTML = `<div style="flex: 1;"><div class="name">${escapeHtml(s.name)}</div><div class="desc">skill criado em ${escapeHtml(s.path)}</div></div>`;
+        dynList.appendChild(div);
+      });
+    }
+  } catch (e) {
+    document.getElementById('tools-list').innerHTML = '<div class="empty-state">falha: ' + e.message + '</div>';
+  }
+}
+
+async function loadMCPs() {
+  try {
+    const r = await fetch('/api/capabilities');
+    const d = await r.json();
+    const tbody = document.getElementById('mcps-tbody');
+    tbody.innerHTML = '';
+    (d.mcps || []).forEach(m => {
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px dashed var(--border)';
+      tr.innerHTML = `
+        <td style="padding: 10px 8px; color: var(--accent); font-family: var(--font-mono); font-size: 11px;">${escapeHtml(m.name)}</td>
+        <td style="padding: 10px 8px; color: var(--fg-dim); font-size: 12px;">${escapeHtml(m.description || '')}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    if ((d.mcps || []).length === 0) {
+      tbody.innerHTML = '<tr><td colspan="2" class="empty-state">nenhum MCP ativo</td></tr>';
+    }
+  } catch (e) { /* offline */ }
+}
+
+async function loadCognition() {
+  try {
+    const r = await fetch('/api/cognition/state');
+    const d = await r.json();
+    const profDiv = document.getElementById('cog-profile');
+    if (d.profile) {
+      profDiv.innerHTML = `
+        <div class="cap-row"><div style="flex:1;"><div class="name">dominio atual</div><div class="desc">${escapeHtml(d.profile.domain || '—')}</div></div></div>
+        <div class="cap-row"><div style="flex:1;"><div class="name">estilo</div><div class="desc">${escapeHtml(d.profile.style || '—')}</div></div></div>
+        <div class="cap-row"><div style="flex:1;"><div class="name">heuristicas aprendidas</div><div class="desc">${d.profile.heuristic_count ?? '—'}</div></div></div>
+        <div class="cap-row"><div style="flex:1;"><div class="name">total de tarefas</div><div class="desc">${d.profile.total_tasks ?? '—'}</div></div></div>
+      `;
+    } else {
+      profDiv.innerHTML = '<div class="empty-state">perfil cognitivo ainda nao foi inicializado</div>';
+    }
+    document.getElementById('cog-heuristics-count').textContent = d.heuristics_count ?? 0;
+    document.getElementById('cog-reflections-count').textContent = (d.recent_reflections || []).length;
+    document.getElementById('cog-heuristics').textContent = (d.recent_heuristics || []).length === 0 ? 'nenhuma' :
+      (d.recent_heuristics || []).map(h => JSON.stringify(h, null, 2)).join('\n\n');
+    document.getElementById('cog-reflections').textContent = (d.recent_reflections || []).length === 0 ? 'nenhuma' :
+      (d.recent_reflections || []).map(r => JSON.stringify(r, null, 2)).join('\n\n');
+    const timeline = document.getElementById('cog-timeline');
+    timeline.innerHTML = '';
+    (d.recent_insights || []).slice().reverse().forEach(i => {
+      const div = document.createElement('div');
+      div.className = 'cap-row';
+      div.innerHTML = `
+        <div style="flex: 1;">
+          <div class="name">${escapeHtml(i.kind || 'observation')}</div>
+          <div class="desc">${escapeHtml((i.note || '').slice(0, 240))}</div>
+          <div style="font: 10px var(--font-mono); color: var(--fg-muted); margin-top: 4px;">${new Date((i.ts || 0) * 1000).toLocaleString()}</div>
+        </div>
+      `;
+      timeline.appendChild(div);
+    });
+  } catch (e) { /* offline */ }
+}
+
+document.getElementById('cog-refresh-btn').addEventListener('click', loadCognition);
+
+async function loadDecisions() {
+  const toolFilter = document.getElementById('dec-tool-filter').value.trim();
+  const allowedFilter = document.getElementById('dec-allowed-filter').value;
+  const params = new URLSearchParams();
+  if (toolFilter) params.set('tool', toolFilter);
+  if (allowedFilter) params.set('only_allowed', allowedFilter);
+  params.set('limit', '50');
+  try {
+    const r = await fetch('/api/decisions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tool: toolFilter || null, only_allowed: allowedFilter || null, limit: 50 }),
+    });
+    const d = await r.json();
+    document.getElementById('dec-summary').textContent =
+      `${d.returned ?? 0} de ${d.total ?? 0} decisoes`;
+    const list = document.getElementById('decisions-list');
+    list.innerHTML = '';
+    if (!d.decisions || d.decisions.length === 0) {
+      list.innerHTML = '<div class="empty-state">nenhuma decisao encontrada</div>';
+      return;
+    }
+    d.decisions.forEach(dec => {
+      const card = document.createElement('div');
+      card.className = 'dec-card';
+      const ts = new Date(dec.ts * 1000).toLocaleString();
+      const userLabel = dec.user || 'system';
+      card.innerHTML = `
+        <div class="head">
+          <div class="tool-name">${escapeHtml(dec.tool || '—')}</div>
+          <div><span class="pill ${dec.allowed ? 'ok' : 'err'}">${dec.allowed ? 'allowed' : 'blocked'}</span></div>
+        </div>
+        <div class="meta">seq #${dec.seq} &middot; ${ts} &middot; ${escapeHtml(userLabel)} &middot; hash: ${escapeHtml(dec.hash)}</div>
+        <div class="payload">${escapeHtml(JSON.stringify(dec.payload, null, 2))}</div>
+      `;
+      list.appendChild(card);
+    });
+  } catch (e) {
+    document.getElementById('decisions-list').innerHTML =
+      '<div class="empty-state">falha: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+document.getElementById('dec-refresh-btn').addEventListener('click', loadDecisions);
+document.getElementById('dec-tool-filter').addEventListener('input', () => {
+  clearTimeout(window._decFilterTimer);
+  window._decFilterTimer = setTimeout(loadDecisions, 300);
+});
+document.getElementById('dec-allowed-filter').addEventListener('change', loadDecisions);
+
+async function loadUploads() {
+  try {
+    const r = await fetch('/api/uploads');
+    const d = await r.json();
+    const list = document.getElementById('uploads-list');
+    if (!d.uploads || d.uploads.length === 0) {
+      list.innerHTML = '<div class="empty-state">nenhum arquivo enviado</div>';
+      return;
+    }
+    list.innerHTML = '';
+    d.uploads.forEach(u => {
+      const row = document.createElement('div');
+      row.className = 'cap-row';
+      const sizeMb = (u.size / 1e6).toFixed(2);
+      row.innerHTML = `
+        <div style="flex: 1;">
+          <div class="name">${escapeHtml(u.filename)}</div>
+          <div class="desc">${sizeMb} MB &middot; ${new Date(u.uploaded_at * 1000).toLocaleString()}</div>
+        </div>
+      `;
+      list.appendChild(row);
+    });
+  } catch (e) { /* offline */ }
+}
+
+// upload handler
+const dropZone = document.getElementById('upload-drop');
+const fileInput = document.getElementById('upload-input');
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--accent)'; });
+dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = 'var(--border)'; });
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault(); dropZone.style.borderColor = 'var(--border)';
+  if (e.dataTransfer.files.length) doUpload(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) doUpload(fileInput.files[0]);
+});
+
+async function doUpload(file) {
+  const prog = document.getElementById('upload-progress');
+  const fill = document.getElementById('upload-fill');
+  const status = document.getElementById('upload-status');
+  prog.classList.remove('hidden');
+  status.textContent = `enviando ${file.name} (${(file.size/1e6).toFixed(2)}MB)...`;
+  fill.style.width = '5%';
+
+  const xhr = new XMLHttpRequest();
+  xhr.upload.onprogress = (e) => {
+    if (e.lengthComputable) {
+      fill.style.width = (e.loaded / e.total * 90) + '%';
+    }
+  };
+  xhr.onload = () => {
+    fill.style.width = '100%';
+    try {
+      const d = JSON.parse(xhr.responseText);
+      if (d.ok) {
+        status.textContent = `OK: ${d.filename} (${(d.size/1e6).toFixed(2)}MB)`;
+        loadUploads();
+      } else {
+        status.textContent = 'falhou: ' + (d.error || '?');
+      }
+    } catch (e) {
+      status.textContent = 'resposta invalida';
+    }
+    setTimeout(() => prog.classList.add('hidden'), 3000);
+  };
+  xhr.onerror = () => { status.textContent = 'erro de rede'; };
+  xhr.open('POST', '/api/upload');
+  const fd = new FormData();
+  fd.append('file', file);
+  xhr.send(fd);
+}
 async function loadSettings() {
   try {
     const r = await fetch('/api/info');

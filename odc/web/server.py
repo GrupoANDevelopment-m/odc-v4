@@ -388,6 +388,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(200, cfg.get("auto_extend", {}))
             elif path == "/api/training/status":
                 self._handle_training_status()
+            elif path == "/api/capabilities":
+                self._handle_capabilities()
+            elif path == "/api/cognition/state":
+                self._handle_cognition_state()
+            elif path == "/api/uploads":
+                self._handle_uploads_list()
             elif path == "/api/system/config":
                 self._send_json(200, _load_system_config())
             elif path == "/favicon.ico":
@@ -400,6 +406,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = self.path.split("?")[0]
+        # Multipart upload: handle BEFORE JSON parsing
+        content_type = self.headers.get("Content-Type", "")
+        if path == "/api/upload" and content_type.startswith("multipart/"):
+            try:
+                self._handle_upload({})
+            except Exception as e:
+                log.exception("upload failed")
+                self._send_json(500, {"error": f"{type(e).__name__}: {e}"})
+            return
         try:
             data = self._read_json()
         except Exception:
@@ -431,6 +446,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._handle_training_start()
             elif path == "/api/specialize/run":
                 self._handle_specialize_run(data)
+            elif path == "/api/decisions":
+                self._handle_decisions(data)
+            elif path == "/api/upload":
+                self._handle_upload(data)
             elif path == "/api/specialize/preview":
                 self._handle_specialize_preview(data)
             elif path == "/api/system/config":
@@ -711,6 +730,59 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             log.warning("new session failed: %s", e)
             return ""
+
+    # ── visibility (transparency endpoints) ──
+    def _handle_capabilities(self) -> None:
+        from odc.web.visibility import get_capabilities
+        self._send_json(200, get_capabilities())
+
+    def _handle_decisions(self, data: dict) -> None:
+        from odc.web.visibility import get_decisions
+        limit = int(data.get("limit", 50)) if data else 50
+        tool = data.get("tool") if data else None
+        allowed = data.get("only_allowed") if data else None
+        if allowed is not None:
+            if str(allowed).lower() in ("true", "1", "yes"):
+                allowed = True
+            elif str(allowed).lower() in ("false", "0", "no"):
+                allowed = False
+            else:
+                allowed = None
+        self._send_json(200, get_decisions(limit=limit, tool=tool,
+                                              only_allowed=allowed))
+
+    def _handle_cognition_state(self) -> None:
+        from odc.web.visibility import get_cognition_state
+        self._send_json(200, get_cognition_state())
+
+    def _handle_upload(self, data: dict) -> None:
+        from odc.web.visibility import save_upload
+        # For multipart we use a separate path
+        content_type = self.headers.get("Content-Type", "")
+        if not content_type.startswith("multipart/form-data"):
+            self._send_json(400, {"error": "expected multipart/form-data"})
+            return
+        from odc.web.visibility import find_boundary, parse_multipart
+        boundary = find_boundary(content_type)
+        if not boundary:
+            self._send_json(400, {"error": "no boundary in multipart"})
+            return
+        ln = int(self.headers.get("content-length", "0"))
+        if ln > 525 * 1024 * 1024:  # 500MB + 25MB headroom for headers
+            self._send_json(413, {"error": "request too large (max 525MB)"})
+            return
+        body = self.rfile.read(ln) if ln > 0 else b""
+        parsed = parse_multipart({"content-type": content_type}, body, boundary)
+        if not parsed["files"]:
+            self._send_json(400, {"error": "no file in upload"})
+            return
+        f = parsed["files"][0]
+        result = save_upload(f["data"], f["filename"], f["content_type"])
+        self._send_json(200, result)
+
+    def _handle_uploads_list(self) -> None:
+        from odc.web.visibility import list_uploads
+        self._send_json(200, list_uploads())
 
 
 def _now() -> str:
