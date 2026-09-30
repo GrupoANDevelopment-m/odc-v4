@@ -84,7 +84,7 @@ def _get_info() -> dict[str, Any]:
 
 def _run_task(text: str, session_id: str | None = None) -> dict[str, Any]:
     agent = _get_agent()
-    run = asyncio.run(agent.run(text, session_id=session_id))
+    run = asyncio.run(agent.run(text, thread_id=session_id))
     tools_used: list[str] = []
     for msg in run.result.final_messages:
         if msg.tool_calls:
@@ -95,7 +95,7 @@ def _run_task(text: str, session_id: str | None = None) -> dict[str, Any]:
         "tool_calls": run.result.tool_calls,
         "tools": tools_used,
         "handed_back": run.result.handed_back_reason,
-        "session_id": getattr(run, "session_id", session_id),
+        "session_id": session_id,
     }
 
 
