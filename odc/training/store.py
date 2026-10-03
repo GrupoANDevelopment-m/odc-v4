@@ -123,15 +123,15 @@ class TrainingStore:
         # Build a Modelfile stub — real training instructions
         modelfile = self.training_dir / "Modelfile"
         modelfile.write_text(
-            "# Auto-generated Modelfile from ODC v4 curated dataset\n"
-            "# Constitutional guarantees enforced upstream (see curator.py)\n"
             f"FROM {self.state.get('base_model', 'llama3.2:3b')}\n\n"
-            "# System prompt — keeps constitutional framing\n"
-            'SYSTEM """You are an ODC-style agent. Reason step by step. '
-            "Cite evidence. Never claim certainty beyond your evidence tier.\"\n\n"
-            f"# Training data: {dataset_path}\n"
-            f"# Examples: {stats.get('after_bipolar', 0)}\n"
-            f"# Patterns: {stats.get('patterns_kept', 0)}\n",
+            'SYSTEM """You are an ODC-style agent specialized in tool use, '
+            "reasoning, and citation of evidence.\n\n"
+            "When the user asks a question:\n"
+            "1. Reason step by step.\n"
+            "2. Cite the evidence tier for each claim (DIRECT_OBSERVATION, "
+            "CORROBORATED, INFERENCE, SPECULATION).\n"
+            "3. Never claim certainty beyond your evidence tier.\n"
+            "4. When uncertain, invoke the appropriate tool rather than guessing.\"\n",
             encoding="utf-8",
         )
 
