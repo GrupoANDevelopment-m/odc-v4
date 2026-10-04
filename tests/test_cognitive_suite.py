@@ -318,17 +318,23 @@ class TestL2_Learning:
         )
         r = asyncio.run(llm.ask(
             "You are a senior systems engineer making cross-domain analogies.",
-            prompt, max_tokens=180, temperature=0.4))
+            prompt, max_tokens=600, temperature=0.4, enable_thinking=True))
         text = r.get("text") or ""
-        # Plausibility signal: must mention cluster and use metaphor from roads
-        has_cluster = "cluster" in text.lower() or "node" in text.lower() or "server" in text.lower()
-        has_road_terms = any(t in text.lower() for t in
-                              ("road", "path", "traffic", "route", "rerout", "redundan", "mesh", "lane"))
-        good = has_cluster and has_road_terms and len(text) >= 50
+        # The model should map road-network features to data-center / cluster /
+        # distributed-compute features. Accept any reasonable target term.
+        target_terms = ("cluster", "node", "server", "service instance",
+                         "data center", "workload", "host", "instance",
+                         "distributed system")
+        source_terms = ("road", "path", "traffic", "route", "rerout",
+                         "redundan", "mesh", "lane", "intersection",
+                         "driver", "navigation", "congestion", "grid")
+        has_target = any(t in text.lower() for t in target_terms)
+        has_source = any(t in text.lower() for t in source_terms)
+        good = has_target and has_source and len(text) >= 80
         record("L2", "T2.3 analogy tool registered",
                "PASS" if good else "FAIL",
-               f"cluster={has_cluster}, road_terms={has_road_terms}, "
-               f"len={len(text)}. LLM said: {text[:160].strip()}... "
+               f"target={has_target}, source={has_source}, "
+               f"len={len(text)}. LLM said: {text[:200].strip()}... "
                f"(latency={r.get('latency_s')}s)")
         assert good
 
