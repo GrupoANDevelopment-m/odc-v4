@@ -434,6 +434,7 @@ class NvidiaProvider(Provider):
         *,
         temperature: float = 0.2,
         max_tokens: int = 4096,
+        extra_body: dict[str, Any] | None = None,
     ) -> Completion:
         self._record_call(messages, tools)
         converted = _to_openai_messages(messages)
@@ -443,6 +444,8 @@ class NvidiaProvider(Provider):
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
         if tools:
             wire_tools = []
             for t in tools:
