@@ -106,12 +106,16 @@ class Agent:
             from odc.osint.tools_keyed import register_all as _register_osint_keyed
             from odc.mcp.tools import register_all as _register_mcp
             from odc.refinement.tools import register_all as _register_refinement
+            from odc.tools.browser import register_browser_tools
             for t in _code_tools() + _dyn_tools() + _cog_tools() + _analysis_tools():
                 try:
                     self.tools.register(t)
                 except ValueError:
                     # already registered (e.g. in tests)
                     pass
+            # Real browser automation — persistent Chromium 1243 (headless).
+            # 11 tools: open/goto/evaluate/screenshot/text/html/cookies*3/close/status.
+            register_browser_tools(self.tools)
             # OSINT — real-time eyes on the planet (flights, earthquakes,
             # CVE, bitcoin, crypto prices, space weather, weather, wikipedia).
             for t in _register_osint(self.tools):

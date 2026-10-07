@@ -47,3 +47,7 @@ logs/
 real_task.py
 .odc_data_real_run/
 .odc_data_real_run
+/.odc_data_real_run/
+/.odc_data_browser_test/
+/odc_browser_test/
+/tmp/odc_browser_test/
