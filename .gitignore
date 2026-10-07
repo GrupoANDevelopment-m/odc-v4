@@ -44,3 +44,6 @@ third_party/original_*.zip
 .env.local
 .odc_data/
 logs/
+real_task.py
+.odc_data_real_run/
+.odc_data_real_run
