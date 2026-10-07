@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -25,13 +26,15 @@ from typing import Any
 class CognitiveProfile:
     """Persistent profile of what the agent has learned.
 
-    Thread-safe enough for a single agent run (no concurrent writes
-    expected). Stored as pretty-printed JSON so humans can inspect it.
+    Thread-safe for concurrent writes. Stored as pretty-printed JSON
+    so humans can inspect it. Writes are atomic (write-to-temp +
+    rename) so a crash mid-write doesn't corrupt the file.
     """
 
     def __init__(self, path: Path):
         self.path = path
         self.data: dict[str, Any] = self._load()
+        self._lock = threading.RLock()
 
     # -- I/O -----------------------------------------------------------
 
@@ -67,39 +70,50 @@ class CognitiveProfile:
     def save(self) -> None:
         self.data["updated"] = time.time()
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
+        tmp = self.path.with_suffix(self.path.suffix + ".tmp")
+        tmp.write_text(
             json.dumps(self.data, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
+        tmp.replace(self.path)
+
+    def _atomic_save(self) -> None:
+        """Save with the lock held — atomic write + rename."""
+        with self._lock:
+            self.save()
 
     # -- mutation ------------------------------------------------------
 
     def record_tool_call(
         self, tool: str, success: bool, error: str | None = None
     ) -> None:
-        s = self.data["tool_success"].setdefault(
-            tool,
-            {"calls": 0, "successes": 0, "failures": 0, "last_used": 0.0, "last_error": ""},
-        )
-        s["calls"] += 1
-        s["last_used"] = time.time()
-        if success:
-            s["successes"] += 1
-        else:
-            s["failures"] += 1
-            s["last_error"] = (error or "")[:200]
-        self.data["meta_metrics"]["total_tool_calls"] += 1
+        with self._lock:
+            s = self.data["tool_success"].setdefault(
+                tool,
+                {"calls": 0, "successes": 0, "failures": 0, "last_used": 0.0, "last_error": ""},
+            )
+            s["calls"] += 1
+            s["last_used"] = time.time()
+            if success:
+                s["successes"] += 1
+            else:
+                s["failures"] += 1
+                s["last_error"] = (error or "")[:200]
+            self.data["meta_metrics"]["total_tool_calls"] += 1
+            self._atomic_save()
 
     def record_task(self, success: bool, turns: int, tools_used: list[str]) -> None:
-        m = self.data["meta_metrics"]
-        m["total_tasks"] += 1
-        if success:
-            m["successful_tasks"] += 1
-        else:
-            m["failed_tasks"] += 1
-        # Exponential moving average for avg_turns_per_task
-        prev = m.get("avg_turns_per_task", 0.0)
-        m["avg_turns_per_task"] = 0.7 * prev + 0.3 * turns
+        with self._lock:
+            m = self.data["meta_metrics"]
+            m["total_tasks"] += 1
+            if success:
+                m["successful_tasks"] += 1
+            else:
+                m["failed_tasks"] += 1
+            # Exponential moving average for avg_turns_per_task
+            prev = m.get("avg_turns_per_task", 0.0)
+            m["avg_turns_per_task"] = 0.7 * prev + 0.3 * turns
+            self._atomic_save()
 
     def add_lesson(self, lesson: str, source: str = "agent") -> None:
         self.data["lessons"].append(

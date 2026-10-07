@@ -134,6 +134,14 @@ class OsirisMemory:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        # Enable WAL mode for concurrent reader/writer scaling
+        # (without this, concurrent threads hit "database is locked")
+        try:
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute("PRAGMA synchronous=NORMAL")
+            self._conn.execute("PRAGMA busy_timeout=5000")
+        except sqlite3.OperationalError:
+            pass
         self._conn.executescript(SCHEMA)
         self._conn.commit()
         self._session_id: str | None = None
