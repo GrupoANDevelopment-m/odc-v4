@@ -35,9 +35,11 @@ from odc.tools.base import tool
 
 _BROWSER_STATE: dict[str, Any] = {
     "playwright": None,
+    "browser": None,
     "context": None,
     "page": None,
     "loop": None,
+    "data_dir": None,
     "lock": asyncio.Lock(),
     "start_count": 0,
     "screenshot_count": 0,
@@ -140,6 +142,18 @@ async def _ensure_browser(data_dir: Path) -> tuple[Any, Any, Any]:
 
 
 def _data_dir() -> Path:
+    """Get the ODC data dir.
+
+    Priority:
+      1. _BROWSER_STATE['data_dir'] (set by register_browser_tools)
+      2. ODC_DATA_DIR env var
+      3. Default Config() data_dir
+    """
+    if _BROWSER_STATE.get("data_dir") is not None:
+        return Path(_BROWSER_STATE["data_dir"])
+    env = os.environ.get("ODC_DATA_DIR")
+    if env:
+        return Path(env)
     from odc.config import Config
     cfg = Config()
     return Path(cfg.data_dir)
@@ -491,7 +505,14 @@ ALL_BROWSER_TOOLS = [
 ]
 
 
-def register_browser_tools(registry) -> None:
-    """Register all browser tools with a ToolRegistry."""
+def register_browser_tools(registry, data_dir: Path | None = None) -> None:
+    """Register all browser tools with a ToolRegistry.
+
+    If data_dir is provided, it's stored in the module-level singleton
+    so the tools can find the right directory even if the tool is
+    invoked outside the agent's process context.
+    """
+    if data_dir is not None:
+        _BROWSER_STATE["data_dir"] = str(data_dir)
     for t in ALL_BROWSER_TOOLS:
         registry.register(t)

@@ -64,6 +64,9 @@ class Agent:
     ) -> None:
         self.config = config or Config()
         self.config.ensure_dirs()
+        # Make data dir visible to tools that import Config lazily
+        import os as _os
+        _os.environ.setdefault("ODC_DATA_DIR", str(self.config.data_dir))
         setup_logging(self.config.log_level, self.config.data_dir / "logs")
 
         # LLM
@@ -115,7 +118,7 @@ class Agent:
                     pass
             # Real browser automation — persistent Chromium 1243 (headless).
             # 11 tools: open/goto/evaluate/screenshot/text/html/cookies*3/close/status.
-            register_browser_tools(self.tools)
+            register_browser_tools(self.tools, self.config.data_dir)
             # OSINT — real-time eyes on the planet (flights, earthquakes,
             # CVE, bitcoin, crypto prices, space weather, weather, wikipedia).
             for t in _register_osint(self.tools):
