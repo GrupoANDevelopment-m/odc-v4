@@ -3,12 +3,15 @@
 **Module:** `odc/refinement/self_heal.py`
 **Date:** 2026-10-14
 
-The user demanded real self-correction without human authorization:
-> "This doesn't need human authorization to self-correct."
+The user demanded:
+1. Real self-correction without human authorization
+2. AST + LLM combined for fix strategies
+3. The agent should also IMPROVE its code, not just fix it
 
-This module implements the closed loop: the agent detects its own
-bugs, generates fixes, applies them, verifies them, and rolls back
-if broken — all autonomously.
+This module implements both: the agent detects its own bugs,
+generates fixes (AST or LLM), applies them, verifies them, and
+rolls back if broken — all autonomously. AND it can proactively
+improve working code via LLM.
 
 ---
 
@@ -17,117 +20,124 @@ if broken — all autonomously.
 ```
 observe_failure(tool, error)   # 1. count repeated failures
    ↓ (after 3+ same error)
-diagnose(tool, pattern)         # 2. read the tool, find root cause
+diagnose(tool, pattern)         # 2. read the tool
    ↓
-propose_fix(tool, body, pattern) # 3. generate candidate fix
+propose_fix() [AST first]       # 3a. try AST strategy
+   ↓ (no AST match)
+propose_fix_with_llm()          # 3b. fallback to LLM
    ↓
-check_safety(fix_body)          # 4. AST safety check (I1-I10)
-   ↓ (must pass)
-backup current → write tmp → atomic rename
+check_safety(fix_body)          # 4. constitutional guard
    ↓
-load_tool(fixed)                # 5. sandbox: can it be loaded?
-   ↓ (must succeed)
-post-test: call the tool         # 6. live verify
+backup → atomic write → load_tool sandbox → live test
    ↓
 record self-patch                # 7. close the loop
 ```
 
-If ANY step fails after the backup, automatic rollback restores
-the previous version.
+For IMPROVEMENT (proactive, not just reactive):
+```
+propose_improvement(tool, focus) # LLM analyzes, suggests refactor
+   ↓
+check_safety → backup → atomic write → load → live test
+   ↓
+record improvement
+```
 
 ---
 
-## What is verified
+## Strategy priority (3-tier)
 
-### `test_self_heal.py` (REAL)
-- Creates a broken dynamic tool (`int + str` → TypeError)
-- Observes 3 identical failures
-- Triggers diagnose → propose_fix → safety_ok → sandbox_ok → apply
-- New file on disk contains healed tool with safety wrapper
-- Backup kept on disk
-- Journal entry written to `self_heal_journal.jsonl`
-- **`✓ AGENT SELF-CORRECTED (no human auth)`**
+1. **AST strategy** (fast, deterministic)
+   - TypeError, ImportError, KeyError, ZeroDivisionError, etc.
+   - No LLM call → no latency, no cost.
+   - Works even when LLM is offline.
 
-### `test_self_heal_rollback.py` (REAL)
-- First heal applied to a working tool
-- Second heal with same error: **IDEMPOTENT** (no re-apply) ✓
-- Manually corrupt the tool
-- `rollback()` restores from `.heal-backup`
-- Backup file removed after restore
-- **`Rollback: True, Tool restored: True, Backup removed: True`**
+2. **LLM strategy** (fallback for novel patterns)
+   - Prompt: "Fix this tool that's failing with <error>"
+   - LLM returns Python code in ```python ... ``` block
+   - Code is parsed, safety-checked, sandbox-tested
+   - Used when AST has no match.
 
----
-
-## Safety properties
-
-1. **Constitutional guard runs** — `check_safety()` AST-validates
-   every fix before apply. `os.system`, `subprocess.Popen` without
-   allow-list, network calls to non-allow-listed domains, etc.
-   are rejected.
-
-2. **Rate limit** — max 10 heals per hour. If exceeded, heal
-   is refused.
-
-3. **Idempotence** — `Auto-healed:` docstring marker means the
-   second heal with same pattern is a no-op.
-
-4. **Atomic write** — write to `.tmp`, rename to live. No
-   partial writes.
-
-5. **Backup before modify** — every heal creates `.heal-backup`.
-   Rollback is one method call.
-
-6. **Sandbox test** — `load_tool()` must succeed after the fix
-   is written. If `load_tool` raises, automatic rollback.
-
-7. **Live test** — after successful load, the tool is invoked
-   to ensure it doesn't crash. If it crashes, the heal is
-   recorded as `post_test_passed=False` but the file is kept
-   (the load succeeded; runtime may need args).
-
-8. **Failure triggers** — only after 3+ identical errors does
-   the engine attempt a heal. Single transient errors are
-   ignored (no thrash).
-
-9. **Journal** — every attempt is logged to
-   `self_heal_journal.jsonl` with: ts, tool, pattern, count,
-   strategy, safety_ok, sandbox_ok, applied, rolled_back,
-   post_test, error.
+3. **LLM improvement** (proactive, not reactive)
+   - No failure required
+   - Focus: "general" | "performance" | "readability" | "safety"
+   - LLM suggests refactor: better edge cases, type hints,
+     docstrings, error handling
+   - Same safety + sandbox pipeline
 
 ---
 
-## Files
+## What is verified (test_self_heal_llm.py)
 
-- `odc/refinement/self_heal.py` (16KB) — engine
-- `test_self_heal.py` — proves heal works
-- `test_self_heal_rollback.py` — proves rollback + idempotence
+Six sub-tests, all REAL (mock LLM, not real API to keep test fast):
+
+| # | Test | Verifies | Result |
+|---|------|----------|--------|
+| 1 | AST strategy for TypeError | AST works without LLM | ✓ |
+| 2 | LLM strategy for novel pattern | LLM fallback works | ✓ |
+| 3 | Unsafe LLM output rejected | Constitutional guard blocks | ✓ |
+| 4 | IMPROVEMENT path | Proactive code quality | ✓ |
+| 5 | Idempotence | Second heal is no-op | ✓ |
+| 6 | Rollback both heal+improve | Recovery works | ✓ |
+
+Final journal: 4 entries showing mixed AST+LLM+improvement.
+
+---
+
+## Code extraction from LLM
+
+The LLM is prompted to return code in `python ... ` blocks. The
+parser:
+1. Tries `r"```python\s*\n(.*?)\n```"` (DOTALL)
+2. Falls back to `r"```\s*\n(.*?)\n```"`
+3. Strips whitespace
+4. Rejects empty / same-as-input
+
+No `eval()` or `exec()` of LLM output — code is only written
+to a file, then loaded via Python's import system. The safety
+guard AST-validates before the load.
 
 ---
 
 ## What this is NOT
 
-- **Not LLM-generated patches.** The fix strategies are
-  hand-coded AST transformations. The agent does not yet
-  use the LLM to generate novel patches for novel error
-  patterns. That's a future direction (LLM-as-surgeon,
-  constitutional-guarded).
-
 - **Not a global auto-modify of ODC itself.** Only dynamic
   tools under `<data_dir>/dynamic/tools/` are auto-healed.
-  The ODC framework itself is read-only to this engine.
+  The ODC framework is read-only to this engine.
 
-- **Not infallible.** A new failure pattern with no matching
-  fix strategy returns `no-known-fix`. Honest: not all bugs
-  can be fixed by these strategies.
+- **Not infallible.** If both AST and LLM fail to generate a
+  fix, the engine returns `no-known-fix` honestly. A
+  `manual` patch via the agent's normal tool-creation path
+  is then the recommended next step.
+
+---
+
+## Files
+
+- `odc/refinement/self_heal.py` (~24KB) — engine
+- `test_self_heal.py` — original heal test (no LLM)
+- `test_self_heal_rollback.py` — rollback + idempotence
+- `test_self_heal_llm.py` — 6 sub-tests for AST+LLM+IMPROVEMENT
 
 ---
 
 ## How to wire into Agent loop
 
-The engine exposes `observe_failure(tool, error)` and
-`observe_success(tool)` — call them from the tool execution
-path after each tool run. When `observe_failure` returns
-`triggered=True`, the agent can call `attempt_heal()`.
+The engine exposes:
+- `observe_failure(tool, error) → dict` — call after every tool run
+- `observe_success(tool) → None` — call on success
+- `attempt_heal(tool, pattern) → SelfHealRecord` — when triggered
+- `attempt_improvement(tool, focus) → ImprovementRecord` — periodic
 
-This wiring lives in `odc/agent/loop.py` (TODO: integration
-patch pending in next iteration).
+To enable LLM-based strategies, pass an `llm_provider` callable:
+```python
+engine = SelfHealEngine(
+    paths, self_imp=self_imp,
+    llm_provider=lambda prompt, **kw: my_llm.ask_sync(prompt, **kw).text,
+)
+```
+
+The agent loop should:
+1. Call `observe_failure` after every tool execution
+2. If `triggered=True`, call `attempt_heal`
+3. Periodically (e.g. nightly) call `attempt_improvement` on
+   frequently-used tools
