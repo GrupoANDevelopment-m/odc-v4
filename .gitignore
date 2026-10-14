@@ -30,24 +30,19 @@ scratch/
 *.sqlite
 *.sqlite3
 
-# Bundled upstream sources (large, original repos cloned for reference)
-third_party/opencode_src/
-third_party/opencode_full/
-third_party/claude_mem/
-third_party/claude_mem_full/
-third_party/agent_reach_full/
-third_party/browser_use_full/
-third_party/original_*.zip
-
 # Local .env (never share secrets!)
 .env
 .env.local
 .odc_data/
 logs/
-real_task.py
-.odc_data_real_run/
-.odc_data_real_run
+
+# Specific transient paths
 /.odc_data_real_run/
+.odc_data_real_run
 /.odc_data_browser_test/
 /odc_browser_test/
 /tmp/odc_browser_test/
+
+# NOTE: third_party/* IS COMMITTED — these are real upstream sources
+# we bundle for offline reference and provenance. Removing them would
+# make the repo lie about its real size and capabilities.
