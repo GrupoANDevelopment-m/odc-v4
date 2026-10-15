@@ -1,23 +1,19 @@
-"""ODC v4 — honest LLM agent.
+"""ODC v4 — Open Digital Companion, a self-improving LLM agent.
 
-Top-level package surface. The real work lives in submodules; this
-file just re-exports the things a typical user calls.
+Cognitive architecture, persistent memory, native tools, dynamic tool
+creation, AST+LLM self-heal, browser automation, MCP memory substrate,
+OSINT sensors, and a 3D web interface.
 """
-from odc.agent import Agent, AgentRun
-from odc.config import Config
-from odc.loop import LoopResult
-from odc.memory import MemoryStore
-from odc.skills import Skill
-from odc.tools import ToolRegistry
+from odc.version import __version__
 
-__version__ = "4.0.0"
-__all__ = [
-    "Agent",
-    "AgentRun",
-    "Config",
-    "LoopResult",
-    "MemoryStore",
-    "Skill",
-    "ToolRegistry",
-    "__version__",
-]
+# Re-export Agent lazily to avoid circular imports
+def __getattr__(name):
+    if name == "Agent":
+        from odc.agent import Agent
+        return Agent
+    if name == "AgentRun":
+        from odc.agent import AgentRun
+        return AgentRun
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+__all__ = ["__version__", "Agent", "AgentRun"]

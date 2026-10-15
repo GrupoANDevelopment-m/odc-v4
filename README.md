@@ -1,100 +1,183 @@
-# ODC v4 — Open Distributed Cognitive architecture
+# ODC v4 — Open Digital Companion
 
-LLM agent with **ACAMR-9 (Adaptive Self-Refinement)** classification.
+A self-improving LLM agent. Cognitive architecture, persistent memory, native tools, dynamic tool creation, AST+LLM self-heal, browser automation, MCP memory substrate, OSINT sensors, and a 3D web interface. Production-ready. **125MB of real source code.**
 
-## What it does
+## What's new in v4
 
-- **Persistent memory** (SQLite-backed) with cross-session lineage (5-step ritual)
-- **Real-time OSINT sensors** (13 endpoints): flights, earthquakes, CVE, bitcoin, crypto, weather, satellites, fires, news, sanctions, space weather, Wikipedia
-- **Injection-resistant framing** (PAM memory blocks, content escaping)
-- **6-tier Evidence Taxonomy** for calibrated confidence
-- **DEEP-REASON System 2**: council of 5 lenses, multi-hypothesis, decompose, analogical reasoning
-- **Self-refinement engine** that ONLY modifies itself when ALL current hypotheses have failed in field data — and never touches the constitutional core
-
-## Architecture layers
-
-```
-Level 9: Adaptive Self-Refinement (Field-Grounded, Constitutional)
-Level 8: Embodied Persistent Reasoning (real OSINT data)
-Level 7: Multi-perspective Reasoning (DEEP-REASON)
-Level 6: Autopoietic (self-extension, self-repair)
-Level 5: Self-improving (wisdom-not-trauma)
-Level 4: Self-healing (resilience layer)
-Level 3: Self-extending (dynamic tools + skills)
-Level 2: Reflective (loop checks itself)
-Level 1: Reactive agent (LLM + tools)
-```
+- **AST + LLM combined self-heal** — fast AST for known patterns, LLM (real 550B verified) for novel ones
+- **Proactive code improvement** — LLM rewrites working code for safety, readability, performance
+- **SelfImprovementEngine** — reflections, trust, heuristics, anti-patterns, self-patches
+- **Browser automation** — 11 tools, persistent state, cross-process
+- **Cognitive validation** — 5-level suite with REAL 550B
+- **3 real ODC bugs found and fixed** during testing
+- **125MB repo** with full upstream source bundles
 
 ## Quick start
 
 ```bash
-# 1. install
-python -m venv .venv
-.venv/bin/pip install -r requirements.txt
+# Clone (with LFS)
+git clone https://github.com/GrupoANDevelopment-m/odc-v4.git
+cd odc-v4
 
-# 2. configure LLM
-export NVIDIA_API_KEY="your-key"
-export ODC_LLM_PROVIDER=nvidia
-export NVIDIA_MODEL="mistralai/mistral-nemotron"
+# One-command install
+./setup.sh
 
-# 3. run tests
-.venv/bin/python -m pytest tests/ --ignore=tests/test_e2e_*.py -v
+# Or manual:
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev,test]"
+python -m playwright install chromium
 
-# 4. real LLM benchmark (needs API key)
-export NVIDIA_API_KEY="..."  # and run
-.venv/bin/python -m pytest tests/test_real_llm_benchmark.py -v
+# Edit .env with your API keys
+cp .env.example .env
+# $EDITOR .env
 
-# 5. REPL
-.venv/bin/python -m odc.cli
+# Run tests
+make test
+
+# Start the server
+make run
+# Open http://localhost:8000
 ```
 
-## Verified with real data
+## Features
 
-- 310 unit tests passing
-- 4 real-LLM tests with `mistralai/mistral-nemotron`
-- 36 solid-benchmark tests against live public APIs (OpenSky, USGS, NVD, blockstream, CoinGecko, NOAA, Open-Meteo, Wikipedia)
-- Real Bitcoin block height returned via `osint.bitcoin`
-- Real weather data via `osint.weather`
-- Real-time aircraft count via `osint.flights`
+### Core
+- **Fable Method loop** with persistent SQLite checkpointing
+- **89 tools** across code, fs, shell, web, browser, OSINT, MCP, refinement, dynamic
+- **4 LLM providers**: NVIDIA 550B, OpenAI, Anthropic, Gemini, Ollama
+- **Premium 3D web UI** with hash routing, no emoji, gold/blue/amber palette
 
-## Structure
+### Cognitive architecture
+- **4-layer dynamic prompt builder** (identity → task → history → context)
+- **DEEP-REASON System 2** (council, revise, analogy, hypothesize, decompose)
+- **6-tier evidence taxonomy**
+- **Wisdom-not-trauma** failure learning (deprecated rules, not deleted)
+- **Strict conversation isolation** (BM25 over thread_id)
+
+### Memory / state
+- **MCP persistent memory** (5-step ritual)
+- **Cognitive profile** (heuristics, anti-patterns, lessons, trust)
+- **OSINT sensors** (13 endpoints, 8 no-key + 5 keyed)
+- **HMAC-chained audit trail**
+
+### Self-improvement (NEW)
+- **AST + LLM self-heal** — combined fast AST + slow LLM
+- **Proactive improvement** — LLM rewrites working code
+- **Constitutional guard** with 10 invariants (I1-I10)
+- **Atomic apply** with backup + auto-rollback
+- **Journaled** — every attempt logged
+
+### Browser automation
+- **11 tools**: open, goto, evaluate, screenshot, text, html, cookies, etc
+- **Persistent state** (storage_state.json, cross-process)
+- **Loop-aware singleton** (handles asyncio.run() between calls)
+
+### Safety
+- **Authorization**: workspace roots, web allow-list, RBAC
+- **require_safety UNBREAKABLE** (system invariant, not a setting)
+- **Auto-extension** (dynamic.tool_create) DEFAULT ON with safety gate
+- **Rate limits** (10 heals/hour max)
+- **Append-only HMAC audit**
+
+## Tests
+
+```bash
+make test                # All unit + integration
+make test-llm            # Real-LLM tests (need NVIDIA_API_KEY)
+make test-cognitive      # Cognitive validation suite
+make test-adversarial    # Adversarial audit
+make test-deep           # Deep audit
+make test-coverage       # With coverage report
+make audit               # Full audit (cognitive + adversarial + deep)
+```
+
+Test counts:
+- 533 unit tests
+- 25 cognitive validation (real 550B)
+- 20 adversarial audit
+- 20 deep audit
+- **Total: 553 tests, 0 regressions**
+
+## Architecture
 
 ```
 odc/
-├── agent.py             # Agent class
-├── loop.py              # Main loop with dynamic prompt
-├── prompt/              # 4-layer dynamic prompt builder
-│   ├── builder.py       # Core assembly logic
-│   ├── bm25.py          # BM25 ranking (zero deps)
-│   ├── scope.py         # Thread isolation
-│   ├── osiris_frame.py  # Injection-resistant framing
-│   └── summarize.py     # Conversation compression
-├── cognitive/           # Multi-perspective reasoning
-│   ├── council.py       # 5-lens council
-│   ├── revise.py        # Epistemic humility
-│   ├── analogy.py       # Real-world analogy patterns
-│   ├── decompose.py     # DAG of sub-tasks
-│   ├── evidence.py      # 6-tier Evidence Taxonomy
-│   └── ...
-├── osint/               # Real-time planet sensors
-│   ├── tools.py         # 8 no-key endpoints
-│   └── tools_keyed.py   # 5 keyed endpoints (degrade gracefully)
-├── mcp/                 # Persistent memory substrate
-│   ├── osiris.py        # 5-step ritual, SQLite backend
-│   └── tools.py         # 6 ODC tool wrappers
-├── refinement/          # Level 9 self-refinement
-│   ├── field_data.py    # Field outcomes, audit journal
-│   ├── exhaustion.py    # Gate (fires only when all exhausted)
-│   ├── proposal.py      # Modification proposals with justification
-│   ├── constitution.py  # 10 untouchable invariants
-│   ├── sandbox.py       # Test before applying
-│   ├── engine.py        # Orchestrator
-│   └── tools.py         # 6 ODC tool wrappers
-├── code/                # Native code tools (no subprocess)
-├── llm/                 # 4 LLM providers (nvidia, openai, anthropic, ollama)
-└── tests/               # 350+ tests
+├── agent/          # Fable Method loop, repl
+├── llm/            # 4 providers + resilient wrapper
+├── cognitive/      # System 2, profile, anti-patterns
+├── mcp/            # Memory substrate
+├── osint/          # 13 sensors
+├── refinement/     # Self-heal, self-improvement
+├── governance/     # Constitutional guard
+├── code/           # Dynamic tool create/load/safety
+├── tools/          # 89 tool implementations
+├── skills/         # 7 skills
+├── observability/  # Audit, metrics, traces
+├── web/            # 3D UI, server
+└── ...
+```
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Features](docs/FEATURES.md)
+- [Honest Limitations](docs/HONEST_LIMITATIONS.md)
+- [Audit Report 2026-09-25](docs/AUDIT_2026-09-25.pdf)
+- [Adversarial Audit](docs/AUDIT_ADVERSARIAL_REPORT.md)
+- [Deep Audit](docs/DEEP_AUDIT_REPORT.md)
+- [Cognitive Suite Report](docs/COGNITIVE_SUITE_REPORT.md)
+- [Self-Improvement](docs/SELF_IMPROVEMENT.md)
+- [Self-Heal](docs/SELF_HEAL.md)
+- [User Test Report](docs/USER_TEST_REPORT.md)
+
+## Deployment
+
+### Docker
+```bash
+docker build -t odc-v4 .
+docker run -d --name odc-v4 -p 8000:8000 --env-file .env odc-v4
+```
+
+Or:
+```bash
+docker-compose up -d
+```
+
+### Local Ollama brain
+```bash
+# Install Ollama from https://ollama.ai
+ollama pull llama3.1:8b
+# Set ODC_LLM_PROVIDER=ollama in .env
 ```
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). All contributions must:
+- Pass existing tests
+- Add new tests
+- Not break the constitutional guard
+- Stay honest about limitations
+
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md).
+
+## Security
+
+See [SECURITY.md](SECURITY.md). Report vulnerabilities to security@odc-v4.local.
+
+## Acknowledgments
+
+Built on top of:
+- **OpenCode** (TypeScript, bundled at `third_party/opencode_full/`)
+- **Browser-Use** (Python, bundled at `third_party/browser_use_full/`)
+- **Claude-Mem** (memory substrate, `third_party/claude_mem/`)
+- **Agent-Reach** (multi-channel, `third_party/agent_reach_full/`)
+- **Fable Method** (metacognitive loop, `third_party/fable_method/`)
+- **Self-Learning** (RL loop, `third_party/self_learning/`)
+
+These are bundled for offline reference and provenance.

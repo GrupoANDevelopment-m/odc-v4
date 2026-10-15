@@ -1,0 +1,40 @@
+version: "3.9"
+
+services:
+  odc:
+    build: .
+    image: odc-v4:4.0.0
+    container_name: odc-v4
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - odc-data:/app/.odc_data
+      - odc-logs:/app/logs
+    env_file:
+      - .env
+    environment:
+      - ODC_HOST=0.0.0.0
+      - ODC_PORT=8000
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Optional: local LLM brain
+  ollama:
+    image: ollama/ollama:latest
+    container_name: odc-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama-data:/root/.ollama
+    ports:
+      - "11434:11434"
+    profiles: ["with-ollama"]
+
+volumes:
+  odc-data:
+  odc-logs:
+  ollama-data:

@@ -1,36 +1,60 @@
-annotated-doc==0.0.5
-annotated-types==0.8.0
-anyio==4.14.2
-beautifulsoup4==4.15.0
-certifi==2026.7.22
-click==8.4.2
-distro==1.9.0
-duckduckgo_search==8.1.1
-h11==0.16.0
-httpcore==1.0.9
-httpx==0.28.1
-idna==3.18
-iniconfig==2.3.0
-jiter==0.16.0
-lxml==6.1.1
-markdown-it-py==4.2.0
-mdurl==0.1.2
-openai==2.52.0
-packaging==26.2
-pluggy==1.6.0
-primp==1.3.1
-pydantic==2.13.4
-pydantic_core==2.46.4
-Pygments==2.20.0
-pytest==9.1.1
-pytest-asyncio==1.4.0
-python-dotenv==1.2.2
-PyYAML==6.0.3
-rich==15.0.0
-shellingham==1.5.4
-sniffio==1.3.1
-soupsieve==2.9.1
-tqdm==4.70.0
-typer==0.27.0
-typing-inspection==0.4.2
-typing_extensions==4.16.0
+# ODC v4 — pinned dependencies
+# Generated for production reproducibility.
+# Python 3.11+ required.
+
+# Core runtime
+# ------------
+pyyaml>=6.0.1,<7
+tomli>=2.0.1,<3; python_version < "3.11"
+tomli-w>=1.0.0,<2
+python-dotenv>=1.0.0,<2
+pydantic>=2.5.0,<3
+jsonschema>=4.20.0,<5
+
+# LLM providers
+# -------------
+openai>=1.30.0,<2          # OpenAI direct
+anthropic>=0.20.0,<1        # Claude
+google-generativeai>=0.3.0,<1  # Gemini
+
+# Search / web
+# ------------
+requests>=2.31.0,<3
+httpx>=0.25.0,<1
+beautifulsoup4>=4.12.0,<5
+lxml>=4.9.0,<6
+
+# Browser automation
+# ------------------
+playwright>=1.40.0,<2
+
+# Storage / DB
+# ------------
+# stdlib: sqlite3, json, ast, asyncio, threading, http.server
+
+# OSINT / network
+# ---------------
+# stdlib: urllib, socket
+# Optional: aiodns for async DNS
+
+# Testing
+# -------
+pytest>=7.4.0,<9
+pytest-asyncio>=0.23.0,<1
+pytest-cov>=4.1.0,<6
+pytest-xdist>=3.5.0,<4  # parallel
+
+# Dev / lint
+# ----------
+ruff>=0.1.0,<1
+mypy>=1.7.0,<2
+black>=23.0.0,<25
+
+# Reports / PDF
+# --------------
+reportlab>=4.0.0,<5
+
+# Type checking
+# -------------
+types-requests>=2.31.0,<3
+types-beautifulsoup4>=4.12.0,<5

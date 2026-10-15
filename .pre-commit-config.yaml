@@ -1,0 +1,39 @@
+# Pre-commit hooks
+# Install: pre-commit install
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.9
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        files: ^(odc|tests)/.*\.py$
+      - id: ruff-format
+        files: ^(odc|tests)/.*\.py$
+
+  - repo: https://github.com/psf/black
+    rev: 23.12.0
+    hooks:
+      - id: black
+        files: ^(odc|tests)/.*\.py$
+        language_version: python3.11
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        files: ^(odc|tests|docs)/.*\.(py|md|yaml|yml|json)$
+      - id: end-of-file-fixer
+        files: ^(odc|tests|docs)/.*\.(py|md|yaml|yml|json)$
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        args: [--maxkb=2048]
+      - id: detect-private-key
+      - id: no-commit-to-branch
+        args: [--branch=main]
+
+  - repo: https://github.com/git-lfs/git-lfs
+    rev: 3.4.0
+    hooks:
+      - id: git-lfs
